@@ -1,0 +1,13 @@
+* { box-sizing: border-box; }
+body { margin: 0; color: #202820; background: #f5f5ec; font: 1rem/1.65 "Noto Sans Ethiopic", Nyala, sans-serif; }
+main { max-width: 50rem; min-height: 100vh; margin: auto; padding: clamp(1rem, 5vw, 3rem); }
+header { border-bottom: 2px solid #829779; margin-bottom: 1.5rem; }
+h1 { margin: 0 0 .6rem; font-size: clamp(1.8rem, 5vw, 2.7rem); }
+section { display: grid; gap: .7rem; }
+article { background: #fff; padding: .9rem 1rem; border-radius: .65rem; overflow-wrap: anywhere; }
+article p { margin: .2rem 0 0; white-space: pre-wrap; }
+form { margin-top: 1.5rem; display: grid; gap: .5rem; }
+textarea { width: 100%; background: #fff; border: 1px solid #66765f; border-radius: .65rem; padding: .8rem; font: inherit; resize: vertical; }
+button { font: inherit; background: #295337; color: white; border: 0; border-radius: .5rem; padding: .45rem 1.2rem; cursor: pointer; }
+button:disabled { opacity: .6; cursor: wait; }
+#status { margin-inline-start: .7rem; }
