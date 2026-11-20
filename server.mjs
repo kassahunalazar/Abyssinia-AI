@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { resolveProvider } from './providers.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const loopback = '127.0.0.1';
@@ -11,11 +12,13 @@ const limits = { request: 16384, message: 4000, reply: 64000 };
 const assets = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message, history = []) {
-  const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID } = process.env;
+export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead) {
+  const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE } = process.env;
+  const { base: ASSISTANT_MODEL_URL, model: ASSISTANT_MODEL_ID, key } = provider ?? {};
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
     throw new Error('Missing Hermes configuration.');
   }
@@ -35,7 +38,7 @@ export function hermesReply(message, history = []) {
         ASSISTANT_HERMES_SOURCE,
         ASSISTANT_MODEL_URL,
         ASSISTANT_MODEL_ID,
-        ASSISTANT_MODEL_KEY: process.env.ASSISTANT_MODEL_KEY,
+        ASSISTANT_MODEL_KEY: key,
       },
       windowsHide: true,
       stdio: ['pipe', 'pipe', process.env.ASSISTANT_TEST_WORKER_LOG === '1' ? 'inherit' : 'ignore'],
@@ -53,14 +56,15 @@ export function hermesReply(message, history = []) {
     child.on('close', code => {
       try {
         if (code !== 0 || size > limits.reply) throw new Error('Hermes run failed.');
-        const { reply } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const { reply, attachmentRead } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (typeof reply !== 'string' || !reply.trim()) throw new Error('Invalid Hermes response.');
+        if (attachment && attachmentRead) onRead?.();
         accept(reply);
       } catch (error) {
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message, history }));
+    child.stdin.end(JSON.stringify({ message, history, attachment }));
   });
 }
 
@@ -88,23 +92,33 @@ export function createAssistant({ reply = hermesReply } = {}) {
         return json(500, { error: 'asset' });
       }
     }
-    if (req.method !== 'POST' || req.url !== '/api/chat') return json(404, { error: 'route' });
+    const testing = req.url === '/api/provider/test';
+    if (req.method !== 'POST' || (!testing && req.url !== '/api/chat')) return json(404, { error: 'route' });
     if (req.headers.origin !== 'http://' + authority) return json(403, { error: 'origin' });
     if (req.headers['content-type'] !== 'application/json') return json(415, { error: 'type' });
 
     const length = Number(req.headers['content-length']);
-    if (!Number.isInteger(length) || length < 1 || length > limits.request) {
+    const maxBytes = req.headers['x-text-attachment'] === '1' ? 128 * 1024 : limits.request;
+    if (!Number.isInteger(length) || length < 1 || length > maxBytes) {
       res.setHeader('Connection', 'close');
       return json(413, { error: 'size' });
     }
     let message;
     let conversation;
+    let provider;
+    let attachment;
     try {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
-      message = typeof data?.message === 'string' ? data.message.trim() : '';
-      conversation = data?.conversation;
+      provider = resolveProvider(data?.provider);
+      if (!provider && (testing || data?.provider !== undefined || reply === hermesReply)) return json(409, { error: 'provider' });
+      message = testing ? 'Reply with OK.' : typeof data?.message === 'string' ? data.message.trim() : '';
+      conversation = testing ? undefined : data?.conversation;
+      attachment = testing ? undefined : data?.attachment;
+      if (attachment !== undefined && (typeof attachment?.text !== 'string' ||
+          Buffer.byteLength(attachment.text) > 16384 || typeof attachment.name !== 'string' ||
+          !attachment.name || attachment.name.length > 255)) return json(400, { error: 'attachment' });
     } catch {
       return json(400, { error: 'message' });
     }
@@ -117,17 +131,21 @@ export function createAssistant({ reply = hermesReply } = {}) {
     if (busy) return json(429, { error: 'busy' });
     busy = true;
     try {
-      const history = conversations.get(conversation) ?? [];
-      const answer = await reply(message, history);
+      const prior = conversations.get(conversation);
+      const route = JSON.stringify([provider?.base, provider?.model]);
+      if (prior && prior.route !== route) return json(409, { error: 'provider_changed' });
+      let read = false;
+      const answer = await reply(message, prior?.turns ?? [], provider, attachment, () => { read = true; });
+      if (testing) return json(200, { ok: true, model: provider.model });
       if (conversation === undefined) return json(200, { reply: answer });
       const id = conversation ?? randomUUID();
-      const turns = [...history, { role: 'user', content: message }, { role: 'assistant', content: answer }];
+      const turns = [...(prior?.turns ?? []), { role: 'user', content: message }, { role: 'assistant', content: answer }];
       conversations.delete(id);
-      conversations.set(id, turns.slice(-8));
+      conversations.set(id, { route, turns: turns.slice(-8) });
       if (conversations.size > 32) conversations.delete(conversations.keys().next().value);
-      return json(200, { reply: answer, conversation: id });
+      return json(200, { reply: answer, conversation: id, ...(read && { tool: 'read_attached_text' }) });
     } catch {
-      return json(502, { error: 'hermes' });
+      return json(502, { error: 'provider_failed' });
     } finally {
       busy = false;
     }

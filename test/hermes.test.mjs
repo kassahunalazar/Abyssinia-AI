@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { createAssistant } from '../server.mjs';
+import { createAssistant, hermesReply } from '../server.mjs';
 
 test('Amharic round trip through the real Hermes agent and a deterministic model endpoint', {
   skip: !process.env.ASSISTANT_PYTHON || !process.env.ASSISTANT_HERMES_SOURCE,
@@ -48,7 +48,7 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
   process.env.ASSISTANT_MODEL_ID = 'assistant-test-model';
   delete process.env.ASSISTANT_MODEL_KEY;
   await mkdir('.runtime', { recursive: true });
-  const server = createAssistant().listen(0, '127.0.0.1');
+  const server = createAssistant({ reply: hermesReply }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
   const origin = 'http://127.0.0.1:' + server.address().port;

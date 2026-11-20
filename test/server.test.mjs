@@ -37,7 +37,7 @@ test('redacts provider failure', async t => {
   const { chat } = await start(t, async () => { throw new Error('secret'); });
   const response = await chat('ሰላም');
   assert.equal(response.status, 502);
-  assert.deepEqual(await response.json(), { error: 'hermes' });
+  assert.deepEqual(await response.json(), { error: 'provider_failed' });
 });
 
 test('keeps completed turns isolated and bounded across chat switches and failed retries', async t => {

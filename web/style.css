@@ -84,3 +84,16 @@ article p { margin: 4px 0 0; white-space: pre-wrap; }
   .workspace { width: calc(100% - 28px); padding-top: 38px; }
 }
 @media (max-width: 360px) { .cards { grid-template-columns: 1fr; } }
+
+dialog#settings { width: min(540px, 94vw); max-height: 86dvh; overflow: auto; border: 1px solid var(--border); border-radius: 18px; padding: 22px; color: var(--text); }
+#settings::backdrop { background: #17203366; }
+#settings header, .settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#settings h2, #settings h3 { margin: .4em 0; }
+#settings button, #settings select, #settings input { font: inherit; border: 1px solid var(--border); padding: 7px 10px; border-radius: 8px; background: white; }
+#provider-form { padding: 14px; border-radius: 12px; }
+#provider-form label { display: grid; gap: 4px; margin-bottom: 10px; }
+#settings dd, #settings p, .composer-footer small { color: var(--muted); font-size: .85rem; }
+#settings dd { margin: 0 0 8px; }
+.composer-footer small { display: block; }
+.composer-footer input { max-width: 100%; }
+.engine { max-width: 45%; overflow-wrap: anywhere; }

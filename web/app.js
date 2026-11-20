@@ -1,4 +1,6 @@
+import { currentProvider, providerLabel } from './settings.js';
 const form = document.querySelector('#composer');
+const attachmentInput = document.querySelector('#attachment');
 const input = document.querySelector('#message');
 const send = document.querySelector('#send');
 const messages = document.querySelector('#messages');
@@ -54,6 +56,7 @@ function makeMessage(role, text) {
 }
 
 function render() {
+  document.querySelector('.engine').textContent = providerLabel(active.provider ?? currentProvider());
   const waiting = pending?.chat === active;
   const inChat = active.entries.length > 0 || waiting;
   welcome.hidden = inChat;
@@ -69,6 +72,7 @@ function render() {
 }
 
 function select(chat) {
+  attachmentInput.value = '';
   active.draft = input.value;
   active = chat;
   input.value = chat.draft;
@@ -105,6 +109,10 @@ form.addEventListener('submit', async event => {
   const chat = active;
   const text = input.value.trim();
   if (!text || pending) return;
+  const provider = chat.provider ?? currentProvider();
+  if (provider.kind === 'none') { chat.error = 'በቅንብሮች ውስጥ አቅራቢ ይምረጡ። · Choose a provider in Settings.'; render(); return; }
+  const file = attachmentInput.files[0];
+  if (file?.size > 16384) { chat.error = 'ፋይሉ ከ16 KB በላይ ነው።'; render(); return; }
   if (!chat.title) {
     chat.title = text.split(/\r?\n/, 1)[0].slice(0, 70);
     chats.unshift(chat);
@@ -116,16 +124,20 @@ form.addEventListener('submit', async event => {
   render();
 
   try {
+    const attachment = file ? { name: file.name, text: new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()) } : undefined;
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, conversation: chat.conversation ?? null }),
+      headers: { 'Content-Type': 'application/json', ...(file && { 'X-Text-Attachment': '1' }) },
+      body: JSON.stringify({ message: text, conversation: chat.conversation ?? null, provider, attachment }),
     });
     if (response.status === 410) throw new Error('expired');
     if (!response.ok) throw new Error('Chat failed');
-    const { reply, conversation } = await response.json();
+    const { reply, conversation, tool } = await response.json();
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
-    chat.entries.push({ role: 'user', text }, { role: 'assistant', text: reply });
+    const activity = tool === 'read_attached_text' ? '\n📄 አንብቧል · Read ' + file.name : '';
+    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply });
+    if (active === chat && attachmentInput.files[0] === file) attachmentInput.value = '';
+    chat.provider = provider;
     chat.conversation = conversation;
   } catch (error) {
     chat.error = error.message === 'expired'
@@ -142,4 +154,5 @@ form.addEventListener('submit', async event => {
   }
 });
 
+document.addEventListener('providerchange', render);
 render();

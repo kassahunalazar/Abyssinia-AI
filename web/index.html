@@ -18,6 +18,7 @@
       <div id="chat-list"></div>
     </div>
     <div class="sidebar-footer"><span class="dot" aria-hidden="true"></span> በዚህ ኮምፒውተር</div>
+    <button class="nav-button" id="settings-open">⚙ ቅንብሮች · Settings</button>
   </aside>
   <main>
     <header class="topbar">
@@ -40,7 +41,8 @@
             <button id="send" type="submit" aria-label="ላክ" title="ላክ" disabled>↑</button>
           </div>
         </div>
-        <div class="composer-footer">የጽሑፍ ውይይት</div>
+        <div class="composer-footer"><label>ጽሑፍ አያይዝ · Attach text <input id="attachment" type="file" accept=".txt,.md,.csv,.json,.log"></label>
+        <small>እስከ 16 KB · Sending allows the selected model to read this file for this turn.</small></div>
       </form>
       <section id="suggestions" aria-labelledby="suggestions-title">
         <h2 id="suggestions-title">በምሳሌ ይጀምሩ</h2>
@@ -55,5 +57,28 @@
       </section>
     </div>
   </main>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <header><h2 id="settings-title">ቅንብሮች · Settings</h2><button type="button" id="settings-close" aria-label="ዝጋ · Close">×</button></header>
+    <form id="provider-form">
+      <label>የሞዴል አቅራቢ · Provider
+        <select id="provider-kind">
+          <option value="startup">የአገልጋዩ ቅንብር · Server default</option>
+          <optgroup label="Known providers"><option value="omniroute">OmniRoute</option><option value="ollama">Ollama</option></optgroup>
+          <option value="custom">ብጁ · Custom provider</option><option value="none">ያለ አቅራቢ · No provider</option>
+        </select>
+      </label>
+      <label id="url-field" hidden>OpenAI-compatible base URL<input id="provider-url" type="url" placeholder="https://example.com/v1"></label>
+      <label id="model-field" hidden>ሞዴል · Model ID<input id="provider-model" maxlength="256"></label>
+      <p>ቅንብሩ ለአዲስ ውይይቶች ይውላል። · Applies to new chats.</p>
+      <div class="settings-actions"><button type="button" id="provider-test">ግንኙነቱን ፈትሽ · Test</button><button type="submit">አስቀምጥ · Save</button></div>
+      <p role="status" id="provider-result"></p>
+    </form>
+    <h3>የአጋዡ ችሎታዎች · Capabilities</h3>
+    <dl><dt>የጽሑፍ ውይይት · Chat</dt><dd>Available with a model provider</dd>
+    <dt>Selected text file</dt><dd>Read-only for one turn with a tool-capable model</dd>
+    <dt>Computer use · Workspace editing · Coding tools</dt><dd>Unavailable</dd>
+    <dt>Web research · MCP · Scheduled tasks</dt><dd>Unavailable</dd>
+    <dt>Voice · Long-term memory</dt><dd>Unavailable</dd></dl>
+  </dialog>
 </body>
 </html>

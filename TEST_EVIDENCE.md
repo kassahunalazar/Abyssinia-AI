@@ -48,3 +48,12 @@ Implemented a per-chat continuation handle and forwarded the latest four success
 ## Abyssinia AI rename · 20 November 2026
 
 The full Windows suite passed all five tests with the installed Hermes worker and loopback model fixture in 44.5 seconds. The renamed page was served at 127.0.0.1:8789.
+
+## Provider settings and Windows frontend evaluation · 20 November 2026
+
+- Implemented known, custom and no-provider choices. Both Test and Chat use the installed Hermes worker. Each new chat pins its selected endpoint and model. One user-selected UTF-8 attachment grants a single in-memory read.
+- Passed all seven tests with node --test on Windows, including the two real Hermes integrations. Zero failed and zero skipped (151.1 s). Edge verified custom settings survive reload and No provider prevents a new chat request.
+- Live OmniRoute returned HTTP 200 on the provider test. In a separate chat Hermes called read_attached_text and the model returned the synthetic code ABY-827 from the attachment.
+- An initial integration run failed because Hermes deferred the custom tool behind its general tool-search bridge. The gateway rejected the unexpected permissions. The application-owned Hermes profile now initializes with tool search off, and the worker checks the exact tool set.
+- AionUI 2.2.2 for Windows was extracted under the ignored runtime directory after SHA-512 verification against its official release manifest. Its bundled doctor reported Hermes and Codex available and OpenCode missing on the evaluation PATH. The desktop app opened. Continuing from onboarding reached browser account sign-in. A model turn inside the upstream AionUI frontend remains unverified.
+- Pending: AionUI end-to-end evaluation after sign-in, authenticated workspace grants and approval inbox, coding backend integration, computer control, native-speaker voice benchmarking, installer and packaged clean-machine tests.
