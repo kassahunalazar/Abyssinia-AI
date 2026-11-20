@@ -97,3 +97,14 @@ dialog#settings { width: min(540px, 94vw); max-height: 86dvh; overflow: auto; bo
 .composer-footer small { display: block; }
 .composer-footer input { max-width: 100%; }
 .engine { max-width: 45%; overflow-wrap: anywhere; }
+
+.topbar #agent-pause {width:auto;height:auto;margin-inline-start:auto;padding:6px 12px;border:1px solid #ae5960;border-radius:9px;color:#862e39;font-size:.87rem}
+#work,#save-document {width:min(620px,94vw);max-height:85dvh;overflow:auto;border:1px solid var(--border);border-radius:16px;padding:20px;color:var(--text)}
+#work::backdrop,#save-document::backdrop {background:#17203366}
+#work header {display:flex;align-items:center;justify-content:space-between}
+#work h2,#work h3,#save-document h2 {margin:.6em 0}
+#work article,#work form,#save-document form {padding:12px;margin:8px 0;border-radius:10px}
+#work button,#save-document button,article.assistant button {padding:5px 10px;margin:3px;border:1px solid var(--border);border-radius:7px;background:white}
+#work pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow:auto}
+#work p,#work li {overflow-wrap:anywhere} #activity-list {max-height:15rem;overflow:auto}
+#work input,#save-document input {width:100%;padding:7px;font:inherit}

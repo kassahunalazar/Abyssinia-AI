@@ -8,7 +8,7 @@ The page holds a handle for each chat. On POST /api/chat, a null conversation st
 
 ## Milestone gaps
 
-M1 has a working gateway and tool-free Hermes adapter. Live recall and model reliability need separate checks from deterministic transport. M2 has responsive chat navigation and search. Settings and provider selection are available. Streaming, stop, durable sessions and a complete activity view remain open. Before any M3 actions, add browser session authentication, an independent pause control, auditable single-use approvals and workspace enforcement. M4 memory management, M5 native-speaker benchmarking, M6 voice, M7 specialists, M8 automation and MCP, M9 hardening and M10 packaging remain open.
+The browser provides local transcripts, user-confirmed notes, reference lookup and read-only project file selection. The gateway owns pause, reminder scheduling, activity and approval-bound document creation. Windows OCR processes one user-selected frame. Remaining milestones include streaming, broader workspace editing, coding worktree execution, interactive desktop control, MCP management, native-speaker speech evaluation and a dependency-bundled installer.
 
 ## AionUI frontend review
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { createAssistant } from '../server.mjs';
+import { testAssistant as createAssistant, browserCookie } from '../http-fixture.mjs';
 import { resolveProvider } from '../providers.mjs';
 
 test('credentials stay bound to their configured endpoint', () => {
@@ -42,8 +42,9 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   await Promise.all([once(endpoint,'listening'),once(app,'listening')]);
   t.after(() => { app.close(); endpoint.close(); });
   const origin = 'http://127.0.0.1:' + app.address().port;
+  const cookie = await browserCookie(origin);
   const provider = {kind:'custom', url:'http://127.0.0.1:'+endpoint.address().port+'/v1', model:'fixture'};
-  const post = (path, data) => fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const post = (path, data) => fetch(origin+path,{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(data)});
   assert.equal((await post('/api/provider/test',{provider})).status,200);
   const data = {message:'read it',conversation:null,provider,attachment:{name:'note.txt',text:'fixture marker'}};
   const first = await (await post('/api/chat',data)).json();

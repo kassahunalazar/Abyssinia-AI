@@ -16,15 +16,19 @@
       <h2>ውይይቶች</h2>
       <p id="empty-history">እስካሁን ውይይት የለም</p>
       <div id="chat-list"></div>
+      <button id="forget-chat" type="button" hidden>ይህን ውይይት ከአሳሹ ሰርዝ</button>
     </div>
     <div class="sidebar-footer"><span class="dot" aria-hidden="true"></span> በዚህ ኮምፒውተር</div>
     <button class="nav-button" id="settings-open">⚙ ቅንብሮች · Settings</button>
+    <button class="nav-button" id="work-open">የሥራ ቦታ</button>
   </aside>
   <main>
     <header class="topbar">
       <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="የጎን ማውጫ">☰</button>
       <span id="chat-title"></span>
+      <button id="agent-pause" class="pause-control" type="button">አቁም · Pause</button>
     </header>
+    <div id="reminder-banner" role="status" hidden><span id="reminder-notice"></span> <button id="dismiss-reminder" aria-label="ዝጋ">×</button></div>
     <div class="workspace" id="workspace">
       <section class="welcome" id="welcome" aria-labelledby="welcome-title">
         <h1 id="welcome-title">ሰላም፣ ዛሬ ምን ልርዳዎት?</h1>
@@ -76,9 +80,45 @@
     <h3>የአጋዡ ችሎታዎች · Capabilities</h3>
     <dl><dt>የጽሑፍ ውይይት · Chat</dt><dd>Available with a model provider</dd>
     <dt>Selected text file</dt><dd>Read-only for one turn with a tool-capable model</dd>
-    <dt>Computer use · Workspace editing · Coding tools</dt><dd>Unavailable</dd>
-    <dt>Web research · MCP · Scheduled tasks</dt><dd>Unavailable</dd>
-    <dt>Voice · Long-term memory</dt><dd>Unavailable</dd></dl>
+    <dt>የኮድ ክለሳ</dt><dd>የተመረጠ የፕሮጀክት ፋይል ያንብቡና ይመርምሩ።</dd>
+    <dt>ማያ ገጽ</dt><dd>ከተመረጠ መስኮት ጽሑፍ ማንበብ · Windows OCR</dd>
+    <dt>የመዳፊት ቁጥጥር · ተርሚናል</dt><dd>ገና አልተዘጋጀም።</dd>
+    <dt>ማስታወሻ ደወል</dt><dd>አንድ ጊዜ ወይም በየቀኑ · አጋዡ ሲሰራ</dd>
+    <dt>የምንጭ ፍለጋ</dt><dd>ዊኪፔዲያ · አማርኛ / English</dd><dt>MCP</dt><dd>ገና አልተዘጋጀም።</dd>
+    <dt>የግል ማስታወሻ</dt><dd>በዚህ አሳሽ ይቀመጣል።</dd><dt>ድምፅ</dt><dd>ገና አልተዘጋጀም።</dd></dl>
   </dialog>
+  <dialog id="work" aria-labelledby="work-title">
+    <header><h2 id="work-title">የሥራ ቦታ</h2><button id="work-close" aria-label="ዝጋ">×</button></header>
+    <p role="status" id="work-message"></p>
+    <h3>የማያ ገጽ ጽሑፍ አንብብ</h3>
+    <button type="button" id="screen-read">መስኮት ምረጥና አንብብ</button>
+    <p id="screen-result" role="status"></p><div id="screen-review" hidden><label>ጽሑፉን ገምግም<textarea id="screen-text" rows="4"></textarea></label>
+    <button id="screen-attach" type="button">ወደ ውይይት አያይዝ</button></div>
+    <h3>የምንጭ ፍለጋ</h3>
+    <form id="research-form"><label>በዊኪፔዲያ ፈልግ<input id="research-query" required maxlength="240"></label>
+    <label>የምንጭ ቋንቋ <select id="research-lang"><option value="am">አማርኛ</option><option value="en">English</option></select></label><button>ፈልግ</button></form>
+    <div id="sources"></div>
+    <h3>AK Code Engine · የኮድ ክለሳ</h3>
+    <label>የፕሮጀክት አቃፊ ምረጥ <input type="file" id="project-picker" webkitdirectory multiple></label>
+    <label>ለክለሳ የሚሆን ፋይል <select id="project-file" disabled></select></label>
+    <button id="review-file" type="button" disabled>ፋይሉን ለክለሳ አያይዝ</button>
+    <h3>የፈቃድ ጥያቄዎች</h3><div id="approval-list"></div>
+    <h3>የግል ማስታወሻዎች</h3>
+    <input id="memo-search" type="search" placeholder="ማስታወሻ ፈልግ" aria-label="ማስታወሻ ፈልግ">
+    <form id="memo-form"><label>ማስታወሻ<textarea id="memo-text" required maxlength="1500"></textarea></label><button>አስቀምጥ</button></form>
+    <div id="memo-list"></div>
+    <h3>ማስታወሻ ደወል</h3>
+    <form id="reminder-form"><label>ርዕስ<input id="reminder-title" maxlength="160" required></label>
+      <label>ቀንና ሰዓት<input id="reminder-time" type="datetime-local" required></label>
+      <label><input id="reminder-daily" type="checkbox"> በየቀኑ</label><button>መዝግብ</button></form>
+    <label><input id="quiet-hours" type="checkbox"> ከ22:00 እስከ 07:00 ደወሎችን አዘግይ</label>
+    <div id="reminders"></div>
+    <h3>የተከናወኑ ተግባራት</h3><ol id="activity-list"></ol>
+  </dialog>
+  <dialog id="save-document"><form id="document-form"><h2>መልሱን በፋይል አስቀምጥ</h2>
+    <label>የፋይል ስም (.txt / .md)<input id="document-name" required value="መልስ.txt" maxlength="83"></label>
+    <label>የፋይሉ ይዘት<textarea id="document-text" required rows="7"></textarea></label>
+    <button type="button" id="save-cancel">ተመለስ</button><button>ፈቃድ ጠይቅ</button><p id="save-error" role="status"></p>
+  </form></dialog>
 </body>
 </html>

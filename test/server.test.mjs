@@ -1,19 +1,20 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import test from 'node:test';
-import { createAssistant } from '../server.mjs';
+import { testAssistant as createAssistant, browserCookie } from '../http-fixture.mjs';
 
 async function start(t, reply) {
   const server = createAssistant({reply}).listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
   const origin = 'http://127.0.0.1:' + server.address().port;
+  const cookie = await browserCookie(origin);
   const chat = (message, from = origin) => fetch(origin + '/api/chat', {
     method: 'POST',
-    headers: { Origin: from, 'Content-Type': 'application/json' },
+    headers: { Cookie: cookie, Origin: from, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
   });
-  return { origin, chat };
+  return { origin, chat, cookie };
 }
 
 test('serves Amharic UI and round trips UTF-8 over HTTP', async t => {
@@ -41,12 +42,12 @@ test('redacts provider failure', async t => {
 });
 
 test('keeps completed turns isolated and bounded across chat switches and failed retries', async t => {
-  const { origin } = await start(t, async (message, history) => {
+  const { origin, cookie } = await start(t, async (message, history) => {
     if (message === 'fail') throw Error();
     return history.filter(entry => entry.role === 'user').map(entry => entry.content).join(',') || 'empty';
   });
   const post = (message, conversation) => fetch(origin + '/api/chat', {
-    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    method: 'POST', headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, conversation }),
   });
   const a = await (await post('1', null)).json();

@@ -3,7 +3,8 @@ import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { createAssistant, hermesReply } from '../server.mjs';
+import { hermesReply } from '../server.mjs';
+import { testAssistant as createAssistant, browserCookie } from '../http-fixture.mjs';
 
 test('Amharic round trip through the real Hermes agent and a deterministic model endpoint', {
   skip: !process.env.ASSISTANT_PYTHON || !process.env.ASSISTANT_HERMES_SOURCE,
@@ -52,10 +53,11 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
   await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
   const origin = 'http://127.0.0.1:' + server.address().port;
+  const cookie = await browserCookie(origin);
   const prompt = 'ጤና ይስጥልኝ';
   const chat = (message, conversation) => fetch(origin + '/api/chat', {
     method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, conversation }),
   });
   const response = await chat(prompt, null);
