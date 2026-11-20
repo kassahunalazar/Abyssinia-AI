@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,7 @@ const assets = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message) {
+export function hermesReply(message, history = []) {
   const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID } = process.env;
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
     throw new Error('Missing Hermes configuration.');
@@ -59,12 +60,13 @@ export function hermesReply(message) {
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message }));
+    child.stdin.end(JSON.stringify({ message, history }));
   });
 }
 
 export function createAssistant({ reply = hermesReply } = {}) {
   let busy = false;
+  const conversations = new Map();
   const server = createServer({ requestTimeout: 10000, headersTimeout: 5000 }, async (req, res) => {
     const authority = loopback + ':' + server.address().port;
     res.setHeader('Cache-Control', 'no-store');
@@ -96,19 +98,34 @@ export function createAssistant({ reply = hermesReply } = {}) {
       return json(413, { error: 'size' });
     }
     let message;
+    let conversation;
     try {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       message = typeof data?.message === 'string' ? data.message.trim() : '';
+      conversation = data?.conversation;
     } catch {
       return json(400, { error: 'message' });
     }
     if (!message || message.length > limits.message) return json(400, { error: 'message' });
+    // Omit for a standalone turn, send null to start a chat, or reuse its handle.
+    if (conversation != null && typeof conversation !== 'string') return json(400, { error: 'conversation' });
+    if (typeof conversation === 'string' && !conversations.has(conversation)) {
+      return json(410, { error: 'conversation' });
+    }
     if (busy) return json(429, { error: 'busy' });
     busy = true;
     try {
-      return json(200, { reply: await reply(message) });
+      const history = conversations.get(conversation) ?? [];
+      const answer = await reply(message, history);
+      if (conversation === undefined) return json(200, { reply: answer });
+      const id = conversation ?? randomUUID();
+      const turns = [...history, { role: 'user', content: message }, { role: 'assistant', content: answer }];
+      conversations.delete(id);
+      conversations.set(id, turns.slice(-8));
+      if (conversations.size > 32) conversations.delete(conversations.keys().next().value);
+      return json(200, { reply: answer, conversation: id });
     } catch {
       return json(502, { error: 'hermes' });
     } finally {

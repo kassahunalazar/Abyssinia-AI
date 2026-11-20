@@ -38,7 +38,7 @@ def main():
         )
         if getattr(agent, "tools", None) != []:
             raise RuntimeError("Expected an empty Hermes tool list.")
-        result = agent.run_conversation(request["message"])
+        result = agent.run_conversation(request["message"], conversation_history=request.get("history", []))
     reply = result.get("final_response")
     if result.get("failed") or result.get("partial") or not isinstance(reply, str) or not reply.strip():
         raise RuntimeError("Hermes returned no successful reply.")

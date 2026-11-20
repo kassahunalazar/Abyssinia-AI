@@ -28,3 +28,19 @@ A follow-up at the normal app address returned a Hermes repetition-stop warning 
 Compared the layout with the [official AionUi homepage screenshot](https://github.com/iOfficeAI/AionUi/blob/main/resources/homepage.png). The Amharic interface uses the sidebar, centered Hermes selector, rounded composer, and prompt-card layout. Chat history and search cover this open page session.
 
 The Windows suite passed 4 of 4 tests, including the installed Hermes worker against a deterministic streaming model endpoint. A separate clean Chromium run verified desktop (1440 × 900) and mobile (390 × 844) layouts, prompt insertion, submit, literal text rendering, new chat, chat switching, search, normalized failure with draft restoration, and the mobile sidebar. The UI submission checks used a fixture reply.
+
+## M1 conversation context · 20 November 2026
+
+Implemented a per-chat continuation handle and forwarded the latest four successful exchanges through the installed Hermes conversation_history interface.
+
+| Check | Observed result |
+| --- | --- |
+| Baseline | Three HTTP tests passed. Hermes was skipped until the installed Python and source paths were supplied. |
+| Windows node --test with real Hermes | Five passed, zero failed, zero skipped in 39.8 s on retry. The first configured run hit the 180 s worker timeout. Its root cause is unresolved. |
+| Model boundary | A deterministic streaming endpoint saw the Amharic first prompt, assistant response and follow-up in order. Both requests had zero tools. |
+| Browser | A fresh headless Edge session created two chats, switched back to the first and received a fixture reply dependent on its own earlier message. |
+| Live model | The application served HTTP 200 on a temporary loopback port. Two Amharic turns through OmniRoute's kc/openrouter/free route returned 200. One exact-phrase check missed. A separate UTF-8 run returned እሺ to the first prompt and exactly AGAR-724 when asked for the earlier marker. |
+| Blocked | No blocker to delivering bounded text context. Reliable upstream model selection remains open. |
+| Not run | Native-speaker quality evaluation, voice tests, security-hardening suite, installer tests. |
+| Known limitations | The browser loses chat handles on reload. The gateway cache is volatile. Route quality and latency vary. |
+| Next step | Establish repeatable live Amharic model results before expanding the M2 session and activity UI. |

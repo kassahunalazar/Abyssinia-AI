@@ -1,6 +1,6 @@
 # አጋር · Agar
 
-Windows-first web assistant powered by Hermes Agent. The first milestone is single-turn Amharic text chat on loopback.
+Windows-first web assistant powered by Hermes Agent. Ask a follow-up in Amharic or English, or select an earlier chat in the sidebar to continue it. Each chat can use its four most recent successful exchanges. Reloading the page clears the sidebar.
 
 ## Windows setup
 

@@ -39,3 +39,23 @@ test('redacts provider failure', async t => {
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { error: 'hermes' });
 });
+
+test('keeps completed turns isolated and bounded across chat switches and failed retries', async t => {
+  const { origin } = await start(t, async (message, history) => {
+    if (message === 'fail') throw Error();
+    return history.filter(entry => entry.role === 'user').map(entry => entry.content).join(',') || 'empty';
+  });
+  const post = (message, conversation) => fetch(origin + '/api/chat', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, conversation }),
+  });
+  const a = await (await post('1', null)).json();
+  const b = await (await post('other', null)).json();
+  assert.notEqual(a.conversation, b.conversation);
+  assert.equal(b.reply, 'empty');
+  assert.equal((await post('fail', a.conversation)).status, 502);
+  for (const message of ['2', '3', '4', '5']) await post(message, a.conversation);
+  assert.equal((await (await post('6', a.conversation)).json()).reply, '2,3,4,5');
+  assert.equal((await (await post('again', b.conversation)).json()).reply, 'other');
+  assert.equal((await post('hello', 'unknown')).status, 410);
+});

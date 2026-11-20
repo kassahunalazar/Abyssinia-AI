@@ -119,14 +119,18 @@ form.addEventListener('submit', async event => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, conversation: chat.conversation ?? null }),
     });
+    if (response.status === 410) throw new Error('expired');
     if (!response.ok) throw new Error('Chat failed');
-    const { reply } = await response.json();
+    const { reply, conversation } = await response.json();
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
     chat.entries.push({ role: 'user', text }, { role: 'assistant', text: reply });
-  } catch {
-    chat.error = 'መልስ ማግኘት አልተቻለም። እባክዎ እንደገና ይሞክሩ።';
+    chat.conversation = conversation;
+  } catch (error) {
+    chat.error = error.message === 'expired'
+      ? 'ይህን ውይይት መቀጠል አይቻልም። እባክዎ አዲስ ውይይት ይጀምሩ።'
+      : 'መልስ ማግኘት አልተቻለም። እባክዎ እንደገና ይሞክሩ።';
     if (active === chat && !input.value) input.value = text;
     else if (active !== chat && !chat.draft) chat.draft = text;
   } finally {

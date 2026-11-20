@@ -53,15 +53,25 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
   t.after(() => new Promise(resolve => server.close(resolve)));
   const origin = 'http://127.0.0.1:' + server.address().port;
   const prompt = 'ጤና ይስጥልኝ';
-  const response = await fetch(origin + '/api/chat', {
+  const chat = (message, conversation) => fetch(origin + '/api/chat', {
     method: 'POST',
     headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: prompt }),
+    body: JSON.stringify({ message, conversation }),
   });
+  const response = await chat(prompt, null);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { reply: 'ሰላም፣ እንዴት ልርዳዎት?' });
+  const { reply, conversation } = await response.json();
+  assert.equal(reply, 'ሰላም፣ እንዴት ልርዳዎት?');
+  assert.equal(typeof conversation, 'string');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].tools?.length ?? 0, 0);
   assert.ok(requests[0].messages.some(message => message.role === 'user' && message.content === prompt));
   assert.ok(requests[0].messages.some(message => message.role === 'system' && message.content.includes('everyday Amharic')));
+  const followup = 'በፊት ምን አልኩ?';
+  assert.equal((await chat(followup, conversation)).status, 200);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].tools?.length ?? 0, 0);
+  assert.deepEqual(requests[1].messages.filter(m => m.role !== 'system').map(m => [m.role, m.content]), [
+    ['user', prompt], ['assistant', reply], ['user', followup],
+  ]);
 });
