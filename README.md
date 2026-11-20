@@ -1,4 +1,4 @@
-# የአማርኛ ረዳት
+# አጋር · Agar
 
 Windows-first web assistant powered by Hermes Agent. The first milestone is single-turn Amharic text chat on loopback.
 
