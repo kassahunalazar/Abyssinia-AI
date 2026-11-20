@@ -22,3 +22,9 @@ Model-generated Amharic quality and live speech are pending. The deterministic f
 The route selects an upstream model dynamically. This test verifies one working text turn. Native-speaker evaluation, model comparisons, and speech tests are pending.
 
 A follow-up at the normal app address returned a Hermes repetition-stop warning instead of an Amharic answer. The named Qwen route was on cooldown (429), Gemini Flash-Lite returned invalid upstream authentication (401), and auto/best-chat timed out. The local server remains configured with the free route. Reliable model selection is pending.
+
+## AionUi-style frontend verification
+
+Compared the layout with the [official AionUi homepage screenshot](https://github.com/iOfficeAI/AionUi/blob/main/resources/homepage.png). The Amharic interface uses the sidebar, centered Hermes selector, rounded composer, and prompt-card layout. Chat history and search cover this open page session.
+
+The Windows suite passed 4 of 4 tests, including the installed Hermes worker against a deterministic streaming model endpoint. A separate clean Chromium run verified desktop (1440 × 900) and mobile (390 × 844) layouts, prompt insertion, submit, literal text rendering, new chat, chat switching, search, normalized failure with draft restoration, and the mobile sidebar. The UI submission checks used a fixture reply.
