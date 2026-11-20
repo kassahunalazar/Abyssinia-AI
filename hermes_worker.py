@@ -40,7 +40,7 @@ def main():
             raise RuntimeError("Expected an empty Hermes tool list.")
         result = agent.run_conversation(request["message"])
     reply = result.get("final_response")
-    if not isinstance(reply, str) or not reply.strip() or result.get("failed"):
+    if result.get("failed") or result.get("partial") or not isinstance(reply, str) or not reply.strip():
         raise RuntimeError("Hermes returned no successful reply.")
     print(json.dumps({"reply": reply}, ensure_ascii=False))
 
