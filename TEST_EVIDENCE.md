@@ -20,3 +20,5 @@ Model-generated Amharic quality and live speech are pending. The deterministic f
 20 November 2026. Sent a short Amharic prompt asking for one sentence about Addis Ababa through the assistant HTTP API, the installed Hermes worker, and the loopback OmniRoute gateway at port 20128. The advertised route was `kc/openrouter/free`. The request returned HTTP 200 and a one-sentence Amharic answer identifying Addis Ababa as Ethiopia's capital and a political and economic center.
 
 The route selects an upstream model dynamically. This test verifies one working text turn. Native-speaker evaluation, model comparisons, and speech tests are pending.
+
+A follow-up at the normal app address returned a Hermes repetition-stop warning instead of an Amharic answer. The named Qwen route was on cooldown (429), Gemini Flash-Lite returned invalid upstream authentication (401), and auto/best-chat timed out. The local server remains configured with the free route. Reliable model selection is pending.
