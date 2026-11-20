@@ -16,7 +16,7 @@ The React entry composes authentication, theme, conversation history and preview
 
 The conversation route loads by ID with SWR and renders ChatConversation. History, messages, plan and preview have dedicated modules. Switching conversations updates the active project and scopes the preview. The layout supports a desktop explorer column and a mobile overlay. [Conversation route](https://github.com/iOfficeAI/AionUi/blob/main/packages/desktop/src/renderer/pages/conversation/index.tsx) · [Conversation modules](https://github.com/iOfficeAI/AionUi/tree/main/packages/desktop/src/renderer/pages/conversation) · [Responsive layout](https://github.com/iOfficeAI/AionUi/blob/main/packages/desktop/src/renderer/components/layout/Layout.tsx)
 
-| Decision | Agar application |
+| Decision | Abyssinia AI application |
 | --- | --- |
 | Reuse directly | No upstream code or assets selected for M1. |
 | Adapt | Session selection and project-scoped panels. Keep the active chat visible when secondary panels collapse. |

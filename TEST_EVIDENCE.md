@@ -6,7 +6,7 @@ Executed node --test from D:\Codex\amharic-hermes with ASSISTANT_PYTHON and ASSI
 
 | Test | Result |
 | --- | --- |
-| Real Hermes worker to a loopback streaming fixture | Passed. Verified Amharic input and output, Amharic system guidance and zero model tools. |
+| Real Hermes worker to a loopback streaming fixture | Passed. Verified Amharic input and output, Amharic system guidance, and that Hermes sent no callable tools to the model. |
 | Amharic page and UTF-8 over HTTP | Passed |
 | Unrelated origin, oversized request and blank message | Passed |
 | Redaction on model failure | Passed |
@@ -44,3 +44,7 @@ Implemented a per-chat continuation handle and forwarded the latest four success
 | Not run | Native-speaker quality evaluation, voice tests, security-hardening suite, installer tests. |
 | Known limitations | The browser loses chat handles on reload. The gateway cache is volatile. Route quality and latency vary. |
 | Next step | Establish repeatable live Amharic model results before expanding the M2 session and activity UI. |
+
+## Abyssinia AI rename · 20 November 2026
+
+The full Windows suite passed all five tests with the installed Hermes worker and loopback model fixture in 44.5 seconds. The renamed page was served at 127.0.0.1:8789.

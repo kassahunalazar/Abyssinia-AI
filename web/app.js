@@ -47,7 +47,7 @@ function makeMessage(role, text) {
   const heading = document.createElement('strong');
   const content = document.createElement('p');
   card.className = role;
-  heading.textContent = role === 'user' ? 'እርስዎ' : 'አጋር · Agar';
+  heading.textContent = role === 'user' ? 'እርስዎ' : 'Abyssinia AI';
   content.textContent = text;
   card.append(heading, content);
   return card;
