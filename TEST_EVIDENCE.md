@@ -124,3 +124,21 @@ Edge on Windows verified system dark mode, explicit light and dark selections, p
 **KNOWN LIMITATIONS** Agent editing targets one explicitly selected source file per request. Specialist delegation provides separate reasoning with a scoped text task. Computer use performs approved actions in one selected window. Generic browser navigation, Git worktrees and arbitrary extension execution remain unavailable.
 
 **NEXT STEP** Expand repository-granted editing and isolated test execution.
+
+## Five-stage acceptance run on Windows
+
+**IMPLEMENTED** — Selectable stock Hermes skill instructions, bounded repository maps, multi-file change proposals, isolated synchronous JavaScript tests, persistent user-confirmed memories, schedule history and approved article previews. Installed Hermes reported 39 compatible bundled skills.
+
+**TESTED** — Ran node --test with test-concurrency=1 and the installed Hermes Python interpreter. The full suite exercised real AIAgent turns against a deterministic model endpoint, including Amharic streaming and context, native planning and installed skill selection with a two-file proposal. Gateway tests ran the same isolated JavaScript project test before and after separately approved file repairs. Edge exercised the project workspace, confirmed-memory migration and persistence, browser snapshots, theme switching, dictation and narration controls. Voice UI tests used synthetic audio and model fixtures. Live Hohe transcribed the 6.973-second Amharic benchmark in 58 seconds.
+
+**PASS** — 54 automated tests passed, zero failures, zero skips, in 219.6 seconds. The baseline also produced a live Amharic first response. Windows UI Automation set Amharic text and invoked the selected fixture button once.
+
+**FAIL** — The initial live continuation exceeded the 130-second client deadline. The live Wikipedia article read timed out during this run. Fixture-based article tests passed.
+
+**BLOCKED** — The release machine had no configured Gemini TTS credential and no native-listener rating for a generated benchmark. Live Gemini narration could not be certified.
+
+**NOT RUN** — Fresh-account Windows engine installation and interactive native folder-picker selection. Folder-grant browser tests supplied a selected fixture path.
+
+**KNOWN LIMITATIONS** — Schedules require the gateway to remain running. Tests support selected synchronous JavaScript modules. General shells, Git worktrees, full browser automation and broad MCP tool execution remain outside the available interfaces.
+
+**NEXT STEP** — Check the packaged build on a clean Windows account and complete the credentialed voice-quality evaluation before promoting to a final release.

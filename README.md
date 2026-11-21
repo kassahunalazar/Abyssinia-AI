@@ -8,7 +8,7 @@ Double-click **Abyssinia AI.cmd**, then open **http://127.0.0.1:8789**. Keep the
 
 Open **የሥራ ቦታ** for source lookup, project file review, local notes, reminders, screen reading, approvals and activity. To create a document, select **በፋይል አስቀምጥ** beneath an answer, edit the name and contents, then approve the exact write. Files are created in the application data folder shown in the approval. Pause interrupts active model or OCR work and suspends reminder delivery. Resume re-enables new work.
 
-Reminders appear inside the app. The gateway must be running for scheduled delivery. Quiet hours use Windows local time. Screen reading uses a single user-selected capture and the installed Windows OCR languages. Review the extracted text before attaching it to a conversation. Voice input and playback remain pending native-speaker evaluation.
+Reminders appear inside the app. The gateway must be running for scheduled delivery. Quiet hours use Windows local time. Screen reading uses a single user-selected capture and the installed Windows OCR languages. Review the extracted text before attaching it to a conversation. Local dictation uses installed speech weights. Reply narration requires a configured Gemini credential and a reviewed voice.
 
 ## Manual Windows setup
 
@@ -27,11 +27,11 @@ Settings supports OmniRoute, Ollama, a custom OpenAI-compatible endpoint, and No
 
 Extract the Windows ZIP into a folder you own and double-click **Open Abyssinia AI.cmd**. This opens the local browser workspace and uses the included Node runtime. The package looks for the installed Hermes environment under LocalAppData. Put backend-only configuration in `%LOCALAPPDATA%\AbyssiniaAI\.env`. Packaged runs keep their approvals, reminders and audit data in `%LOCALAPPDATA%\AbyssiniaAI\data`. To reproduce the package, run `powershell -File scripts/build-windows.ps1` from a clean checkout.
 
-In AK Code Engine, select a source file in the Windows picker. Edit the draft yourself or explicitly send its contents and a change request to the selected model. Check JavaScript or Python syntax before approval. Review the complete before and after text in the inbox. Approval writes that revision, and rollback needs its own approval. Editing is limited to one selected file at a time.
+In AK Code Engine, select a source file in the Windows picker. Edit the draft yourself or explicitly send its contents and a change request to the selected model. Check JavaScript or Python syntax before approval. Review the complete before and after text in the inbox. Approval writes that revision, and rollback needs its own approval. For a repository task, grant a project folder, select up to four editable files in the map and select the chat edit action. Each proposed replacement has a separate diff and approval.
 
 In Connections, add a local MCP HTTP endpoint to inspect its advertised tools. The connection can be disabled or removed. Under desktop controls, select a window and request focus or a page scroll. Each action requires approval. OCR remains available for a frame you select yourself.
 
-The voice evaluation panel records short samples, transcribes them with an installed local model and lets you correct the text before adding it to chat. Speech playback requires a configured speech provider and a qualifying native-listener review. Local model weights and personal credentials are outside the package.
+The composer microphone transcribes a short recording with the selected local model and inserts the transcript into the editable draft. Speech playback requires a configured speech provider and a qualifying native-listener review. Local model weights and personal credentials are outside the package.
 
 The optional Hohe speech model is distributed separately under CC BY 4.0. Original Amharic model by Chapi and Dataset.ET, based on Ethio-ASR; INT8 ONNX conversion by Yaredoffice. [Original model](https://huggingface.co/snapwre/hohe-asr-amharic) · [Quantized weights](https://huggingface.co/Yaredoffice/hohe-asr-amharic-onnx-int8) · [License](https://creativecommons.org/licenses/by/4.0/)
 
@@ -42,7 +42,7 @@ On a new Windows account, the ZIP includes **Setup Abyssinia Engine.cmd**. It ru
 
 Open Settings → Theme to choose System, Dark or Light. System follows Windows appearance, including changes while the app is open. The browser remembers explicit selections. The palette covers the composer, history, chat messages, dialogs and approval text.
 
-Open Voice from the composer. For Gemini, select **Connect Gemini** and enter your API key in the native Windows password field. The running gateway keeps this key in memory. For persistence you can set ABYSSINIA_TTS_KEY in the backend environment. Generate a sample and rate its naturalness and clarity after listening. Playback requires a native-listener review of that model and voice.
+Open Settings → Voice. For Gemini, select **Connect Gemini** and enter your API key in the native Windows password field. The running gateway keeps this key in memory. For persistence you can set ABYSSINIA_TTS_KEY in the backend environment. Generate a sample and rate its naturalness and clarity after listening. Playback requires a native-listener review of that model and voice.
 
 ## Scheduling from chat
 
@@ -63,3 +63,15 @@ Open Capabilities → Computer use. Enable control, list windows, select a windo
 Open AK Code Engine and select one source file. Describe the change in Amharic or English and ask Hermes to prepare it. Hermes calls the scoped read and edit proposal tools. The approval inbox shows the diff and complete content before writing. You can check JavaScript or Python syntax and request rollback. The Windows host needs an isolated execution backend before the product can run arbitrary project commands.
 
 For a second Hermes opinion, select the specialist tool in Capabilities and describe the analysis. One separate Hermes turn receives the bounded task. It has no file or tool permissions. The planning skill can use the installed Hermes todo_list tool, with tool activity visible while it runs.
+
+## Installed skills, memory and project tests
+
+In Capabilities → Skills, load the installed Hermes catalog, filter by name or description, and select a skill for the conversation. The gateway resolves its instructions from the installed engine. The selected skill inherits the tools granted for that turn. Skills requiring additional services or toolsets need those integrations to execute their full workflows.
+
+Use the sidebar shortcuts for memory, schedules, approvals and coding. Memory entries retain their source and timestamps in the local gateway. Existing browser notes can be imported individually. A note enters chat when you place it in the composer. Schedule history shows recent runs and their outcomes.
+
+For JavaScript tests, select the synchronous `.test.js` or `.test.mjs` file and its imported local modules in AK Code Engine. Select **JS ፈተና አስኪድ**, review the file list, then approve. The runner supports ES modules, synchronous two-argument `test(name, fn)` and the `ok`, `equal` and `strictEqual` assertions. It runs the selected source in a QuickJS WebAssembly guest with a 16 MiB heap and a two-second execution budget. The test output shows each case. Node filesystem APIs, terminal processes and package scripts are outside this runner.
+
+The article reader previews approved English and Amharic Wikipedia articles and can extract text from a locally selected HTML file. Linked articles require their own approval. Select the preview for chat to send its text to the configured model.
+
+The bundled test engine uses quickjs-emscripten-core and @jitl/quickjs-singlefile-cjs-release-sync 0.32.0, bundled for Node with esbuild 0.28.2. The distribution notices are in vendor/quickjs/LICENSE.

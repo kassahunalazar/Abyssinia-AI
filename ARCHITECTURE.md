@@ -37,3 +37,11 @@ Voice selection requires a shared Amharic STT/TTS script and native-speaker eval
 The gateway can stream Hermes text deltas as NDJSON and preserves JSON responses for existing callers. AK Code Engine holds one revocable native file-picker grant per gateway. Source editing, rollback and Windows window control use the approval inbox. MCP discovery negotiates a loopback HTTP session, requests tool metadata and closes the session. The speech pipeline runs a bounded local transcription subprocess; voice playback uses a separate backend adapter and a native-listener review for the exact model and voice.
 
 Directory-wide edits, Git worktrees, arbitrary project test execution, model-directed MCP calls, and browser form automation still require integrations. The local package includes Node and depends on the installed Hermes environment.
+
+## Repository workspaces and local execution
+
+The gateway grants a native-picked project directory for bounded reads. A chat edit can include up to four explicitly selected editable files, together limited to 16 KiB of serialized context. The read receipt precedes proposals. The server binds each proposed path to that selection, checks the original contents and identity again on approval, and consumes one approval per replacement. Users can approve a subset. Folder revocation invalidates pending folder operations.
+
+The JavaScript test worker loads selected module snapshots and a small synchronous test API in QuickJS WebAssembly. Project code receives no host functions for filesystem, network or process access. The child has a wall-clock timeout, an interruptible guest heap and a bounded reply. The application displays the results and records the outcome. Git worktrees and general-purpose package scripts remain outside this execution adapter.
+
+Confirmed memories and the most recent 100 schedule runs use the local state store. Memory enters model context through an explicit user action. The stock Hermes skill catalog is read from the pinned engine source using its platform filter and metadata parser. Selecting a skill loads its bounded instructions into the next scoped turn. Native desktop controls, article reads and test runs use the approval inbox.
