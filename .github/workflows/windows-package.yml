@@ -62,3 +62,37 @@ jobs:
           if ($complete) { Write-Output 'Full package already published'; exit 0 }
           gh release upload $env:PACKAGE_TAG .runtime/Abyssinia-AI-Windows.zip --clobber
           if ($LASTEXITCODE) { throw 'Release upload failed' }
+  install-smoke:
+    needs: windows
+    permissions:
+      contents: read
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.revision }}
+          persist-credentials: false
+      - name: Install packaged engine and test Amharic chat
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ inputs.revision }}
+        run: |
+          $tag = 'windows-preview-' + $env:REVISION.Substring(0,7)
+          $download = Join-Path $env:RUNNER_TEMP 'package-download'
+          gh release download $tag -p Abyssinia-AI-Windows.zip -D $download
+          if ($LASTEXITCODE) { throw 'Download failed' }
+          Expand-Archive (Join-Path $download 'Abyssinia-AI-Windows.zip') (Join-Path $download 'unpacked')
+          $app = Get-ChildItem (Join-Path $download 'unpacked') -Directory -Filter 'app-*'
+          $node = Join-Path $app.FullName 'node.exe'
+          $env:GH_TOKEN = $null
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $app.FullName 'scripts/setup-engine.ps1')
+          if ($LASTEXITCODE) { throw 'Engine setup failed' }
+          $deps = Join-Path $env:LOCALAPPDATA 'AbyssiniaAI/hermes-deps'
+          $env:ASSISTANT_HERMES_SOURCE = Join-Path $deps 'hermes-agent'
+          $installed = Get-ChildItem "$deps/installs/*/environments/*" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $env:ASSISTANT_PYTHON = Join-Path $installed.FullName 'venv/Scripts/python.exe'
+          if (-not (Test-Path $env:ASSISTANT_PYTHON)) { throw 'Engine Python missing' }
+          & $node --test --test-concurrency=1 test/hermes.test.mjs test/native-skills.test.mjs
+          if ($LASTEXITCODE) { throw 'Installed integration failed' }
