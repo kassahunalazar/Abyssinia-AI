@@ -24,7 +24,8 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
           created: 1,
           choices: [{ index: 0, delta, finish_reason }],
         }) + '\n\n');
-        send({ role: 'assistant', content: 'ሰላም፣ እንዴት ልርዳዎት?' }, null);
+        send({ role: 'assistant', content: 'ሰላም፣ ' }, null);
+        send({ content: 'እንዴት ልርዳዎት?' }, null);
         send({}, 'stop');
         return res.end('data: [DONE]\n\n');
       }
@@ -55,9 +56,9 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
   const origin = 'http://127.0.0.1:' + server.address().port;
   const cookie = await browserCookie(origin);
   const prompt = 'ጤና ይስጥልኝ';
-  const chat = (message, conversation) => fetch(origin + '/api/chat', {
+  const chat = (message, conversation, accept = 'application/json') => fetch(origin + '/api/chat', {
     method: 'POST',
-    headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' },
+    headers: { Cookie: cookie, Origin: origin, Accept: accept, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, conversation }),
   });
   const response = await chat(prompt, null);
@@ -70,10 +71,20 @@ test('Amharic round trip through the real Hermes agent and a deterministic model
   assert.ok(requests[0].messages.some(message => message.role === 'user' && message.content === prompt));
   assert.ok(requests[0].messages.some(message => message.role === 'system' && message.content.includes('everyday Amharic')));
   const followup = 'በፊት ምን አልኩ?';
-  assert.equal((await chat(followup, conversation)).status, 200);
+  const streamed = await chat(followup, conversation, 'application/x-ndjson');
+  assert.equal(streamed.status, 200);
+  assert.match(streamed.headers.get('content-type'), /^application\/x-ndjson\b/);
+  const [first, ...events] = (await streamed.text()).trimEnd().split('\n').map(line => JSON.parse(line));
   assert.equal(requests.length, 2);
   assert.equal(requests[1].tools?.length ?? 0, 0);
   assert.deepEqual(requests[1].messages.filter(m => m.role !== 'system').map(m => [m.role, m.content]), [
     ['user', prompt], ['assistant', reply], ['user', followup],
   ]);
+  assert.deepEqual(first, { state: 'thinking' });
+  const final = events.pop();
+  assert.deepEqual(events, [{ delta: 'ሰላም፣ ' }, { delta: 'እንዴት ልርዳዎት?' }]);
+  assert.equal(final.status, 200);
+  assert.equal(final.reply, reply);
+  assert.equal(final.conversation, conversation);
+  assert.equal(requests[1].stream, true);
 });

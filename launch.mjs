@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAssistant } from './server.mjs';
@@ -6,6 +7,8 @@ import { createAssistant } from './server.mjs';
 const root = fileURLToPath(new URL('.', import.meta.url));
 if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
 const env = process.env;
+const userConfig=join(env.LOCALAPPDATA ?? root, 'AbyssiniaAI', '.env');
+if(existsSync(userConfig))process.loadEnvFile(userConfig);
 const port = Number(env.ASSISTANT_PORT ?? 8789);
 const url = 'http://127.0.0.1:' + port;
 const home = join(env.LOCALAPPDATA ?? '', 'hermes');
@@ -29,6 +32,13 @@ if (!existsSync(env.ASSISTANT_PYTHON ?? '') || !existsSync(join(env.ASSISTANT_HE
 }
 env.ASSISTANT_MODEL_URL ??= 'http://127.0.0.1:20128/v1';
 env.ASSISTANT_MODEL_ID ??= 'kc/openrouter/free';
+function openBrowser(){
+  if(process.platform==='win32' && process.argv.includes('--open')){
+    const explorer=spawn(join(env.SystemRoot,'explorer.exe'),[url],{detached:true,stdio:'ignore'});
+    explorer.on('error',()=>console.log(url));
+    explorer.unref();
+  }
+}
 const server = createAssistant();
 server.on('error', async error => {
   if (error.code === 'EADDRINUSE') {
@@ -36,6 +46,7 @@ server.on('error', async error => {
       const page = await fetch(url,{signal:AbortSignal.timeout(3000)});
       if ((await page.text()).includes('<title>Abyssinia AI</title>')) {
         console.log('Abyssinia AI is already running at ' + url);
+        openBrowser();
         return;
       }
     } catch {}
@@ -43,4 +54,4 @@ server.on('error', async error => {
   console.error('Unable to start Abyssinia AI:', error.code);
   process.exitCode = 1;
 });
-server.listen(port, '127.0.0.1', () => console.log('Open Abyssinia AI at ' + url + '\nPress Ctrl+C to stop the gateway.'));
+server.listen(port, '127.0.0.1', () => { console.log('Open Abyssinia AI at ' + url + '\nPress Ctrl+C to stop the gateway.'); openBrowser(); });

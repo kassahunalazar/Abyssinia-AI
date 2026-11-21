@@ -80,17 +80,48 @@
     <h3>የአጋዡ ችሎታዎች · Capabilities</h3>
     <dl><dt>የጽሑፍ ውይይት · Chat</dt><dd>Available with a model provider</dd>
     <dt>Selected text file</dt><dd>Read-only for one turn with a tool-capable model</dd>
-    <dt>የኮድ ክለሳ</dt><dd>የተመረጠ የፕሮጀክት ፋይል ያንብቡና ይመርምሩ።</dd>
+    <dt>የኮድ ክለሳና እርማት</dt><dd>ነጠላ ፋይል · ፈቃድና መልሶ መመለስ</dd>
     <dt>ማያ ገጽ</dt><dd>ከተመረጠ መስኮት ጽሑፍ ማንበብ · Windows OCR</dd>
-    <dt>የመዳፊት ቁጥጥር · ተርሚናል</dt><dd>ገና አልተዘጋጀም።</dd>
+    <dt>የመስኮት ቁጥጥር</dt><dd>በፈቃድ ወደፊት ማምጣትና ገጽ ማንሸራተት</dd>
     <dt>ማስታወሻ ደወል</dt><dd>አንድ ጊዜ ወይም በየቀኑ · አጋዡ ሲሰራ</dd>
-    <dt>የምንጭ ፍለጋ</dt><dd>ዊኪፔዲያ · አማርኛ / English</dd><dt>MCP</dt><dd>ገና አልተዘጋጀም።</dd>
-    <dt>የግል ማስታወሻ</dt><dd>በዚህ አሳሽ ይቀመጣል።</dd><dt>ድምፅ</dt><dd>ገና አልተዘጋጀም።</dd></dl>
+    <dt>የምንጭ ፍለጋ</dt><dd>ዊኪፔዲያ · አማርኛ / English</dd><dt>MCP</dt><dd>የአካባቢ አገልጋዮችና የመሣሪያዎች ዝርዝር</dd>
+    <dt>የግል ማስታወሻ</dt><dd>በዚህ አሳሽ ይቀመጣል።</dd><dt>ድምፅ</dt><dd>የአማርኛ ሙከራ · የንባብ ድምፅ የተናጋሪ ግምገማ ይጠብቃል።</dd></dl>
   </dialog>
   <dialog id="work" aria-labelledby="work-title">
     <header><h2 id="work-title">የሥራ ቦታ</h2><button id="work-close" aria-label="ዝጋ">×</button></header>
     <p role="status" id="work-message"></p>
+    <details id="voice-panel"><summary>የአማርኛ ድምፅ ሙከራ</summary>
+      <p>“ሰላም፣ ነገ ጠዋት ስብሰባ አለኝ።” ብለው ይቅረጹ። ተመሳሳይ ድምፅን በሁለቱም ሞዴሎች ይፈትሹ።</p>
+      <button type="button" id="voice-record" disabled>ቅዳ</button><button type="button" id="voice-stop" disabled>ቀረጻ አቁም</button>
+      <label>Whisper <select id="voice-model"></select></label>
+      <button type="button" id="voice-run" disabled>ድምፁን ወደ ጽሑፍ ቀይር</button>
+      <p id="voice-state" role="status"></p><label>ጽሑፉን አርም<textarea id="voice-transcript" rows="3"></textarea></label>
+      <button id="voice-use" type="button">ወደ መልዕክት ቅዳ</button>
+      <h3>የንባብ ድምፅ ግምገማ</h3>
+      <p id="tts-script"></p><p id="tts-status" role="status"></p>
+      <select id="tts-model" aria-label="የንባብ ሞዴል"></select><select id="tts-voice" aria-label="ድምፅ"></select>
+      <button id="tts-sample" type="button" disabled>የሙከራ ድምፅ አዘጋጅ</button>
+      <audio id="tts-player" controls hidden></audio>
+      <form id="tts-rating" hidden>
+        <label>ተፈጥሯዊነት (1–5)<input type="number" id="tts-natural" min="1" max="5" required></label>
+        <label>ግልጽነት (1–5)<input type="number" id="tts-clear" min="1" max="5" required></label>
+        <label><input type="checkbox" id="tts-native" required>አማርኛ አፍ መፍቻ ቋንቋዬ ነው፤ ድምፁን አዳምጫለሁ።</label>
+        <button>ግምገማዬን አስቀምጥ</button>
+      </form>
+      <button id="tts-disable" type="button" hidden>ድምፁን አሰናክል</button>
+    </details>
+    <details><summary>ግንኙነቶች · MCP</summary>
+    <form id="mcp-add"><label>ስም<input id="mcp-name" required maxlength="80"></label>
+    <label>የአካባቢ MCP URL<input id="mcp-url" type="url" placeholder="http://127.0.0.1:8080/mcp" required></label><button>አክል</button></form>
+    <p>ፈቃድ · መሣሪያዎችን መዘርዘር</p><div id="mcp-list"></div></details>
     <h3>የማያ ገጽ ጽሑፍ አንብብ</h3>
+    <details><summary>የመስኮት ቁጥጥር · Windows</summary>
+      <label><input type="checkbox" id="desktop-enabled">ለእያንዳንዱ እርምጃ ፈቃድ ጠይቅና የመስኮት ቁጥጥርን አንቃ</label>
+      <button id="desktop-list" disabled>መስኮቶችን አሳይ</button>
+      <select aria-label="መስኮት" id="desktop-window"></select>
+      <select aria-label="እርምጃ" id="desktop-operation"><option value="focus">ወደፊት አምጣ</option><option value="scrollDown">አንድ ገጽ ወደታች</option><option value="scrollUp">አንድ ገጽ ወደላይ</option></select>
+      <button id="desktop-propose" disabled>ፈቃድ ጠይቅ</button>
+    </details>
     <button type="button" id="screen-read">መስኮት ምረጥና አንብብ</button>
     <p id="screen-result" role="status"></p><div id="screen-review" hidden><label>ጽሑፉን ገምግም<textarea id="screen-text" rows="4"></textarea></label>
     <button id="screen-attach" type="button">ወደ ውይይት አያይዝ</button></div>
@@ -102,6 +133,17 @@
     <label>የፕሮጀክት አቃፊ ምረጥ <input type="file" id="project-picker" webkitdirectory multiple></label>
     <label>ለክለሳ የሚሆን ፋይል <select id="project-file" disabled></select></label>
     <button id="review-file" type="button" disabled>ፋይሉን ለክለሳ አያይዝ</button>
+    <button id="code-pick" type="button">ለማርትዕ አንድ ፋይል ፍቀድ</button>
+    <section id="code-edit" hidden>
+      <p id="code-target"></p>
+      <label>የሚፈለገው ለውጥ<input id="code-instruction" maxlength="1000"></label>
+      <button id="code-generate" type="button">ፋይሉን ለሞዴሉ ላክና ለውጥ አዘጋጅ</button>
+      <label>የታቀደ ይዘት<textarea id="code-content" rows="8" spellcheck="false"></textarea></label>
+      <button id="code-check" type="button">Syntax ፈትሽ · JS / Python</button>
+      <button id="code-propose" type="button">ለውጡን ለፈቃድ አቅርብ</button>
+      <button id="code-undo" type="button">መልሶ ለመመለስ ፈቃድ ጠይቅ</button>
+      <button id="code-revoke" type="button">የፋይሉን ፈቃድ ዝጋ</button>
+    </section>
     <h3>የፈቃድ ጥያቄዎች</h3><div id="approval-list"></div>
     <h3>የግል ማስታወሻዎች</h3>
     <input id="memo-search" type="search" placeholder="ማስታወሻ ፈልግ" aria-label="ማስታወሻ ፈልግ">

@@ -18,6 +18,10 @@ PROMPT = (
 
 def main():
     request = json.load(sys.stdin)
+    output = sys.stdout
+    def stream_text(delta):
+        if isinstance(delta, str) and delta:
+            print(json.dumps({"delta": delta}, ensure_ascii=False), file=output, flush=True)
     # The gateway sets HERMES_HOME to its own ignored runtime directory.
     config = Path(os.environ["HERMES_HOME"]) / "config.yaml"
     config.parent.mkdir(parents=True, exist_ok=True)
@@ -71,7 +75,8 @@ def main():
         names = [tool["function"]["name"] for tool in agent.tools]
         if names != (["read_attached_text"] if attachment is not None else []):
             raise RuntimeError(f"Unexpected Hermes tool permissions: {names!r}")
-        result = agent.run_conversation(request["message"], conversation_history=request.get("history", []))
+        result = agent.run_conversation(request["message"], conversation_history=request.get("history", []),
+                                        stream_callback=stream_text if request.get("stream") else None)
     reply = result.get("final_response")
     if result.get("failed") or result.get("partial") or not isinstance(reply, str) or not reply.strip():
         raise RuntimeError("Hermes returned no successful reply.")

@@ -32,3 +32,8 @@ Evaluate upstream AionUI as an experimental Windows frontend using its external 
 AK Code Engine will use T3 Code's thread-to-worktree and diff-review workflow as its reference. Start with a bounded Codex execution adapter under Hermes delegation after repository grants, approvals and cancellation are in place. T3 Code documents a generic ACP option. Interoperability with the installed Hermes version still needs a session test. [T3 Code](https://github.com/pingdotgg/t3code)
 
 Voice selection requires a shared Amharic STT/TTS script and native-speaker evaluation. Keep the existing exclusion policy in SECURITY.md in force at provider registration, selection and fallback.
+## November 21 implementation
+
+The gateway can stream Hermes text deltas as NDJSON and preserves JSON responses for existing callers. AK Code Engine holds one revocable native file-picker grant per gateway. Source editing, rollback and Windows window control use the approval inbox. MCP discovery negotiates a loopback HTTP session, requests tool metadata and closes the session. The speech pipeline runs a bounded local transcription subprocess; voice playback uses a separate backend adapter and a native-listener review for the exact model and voice.
+
+Directory-wide edits, Git worktrees, arbitrary project test execution, model-directed MCP calls, and browser form automation still require integrations. The local package includes Node and depends on the installed Hermes environment.

@@ -1,3 +1,5 @@
+import './voice.js';
+import { currentProvider } from './settings.js';
 const $ = id => document.getElementById(id);
 let stopped = false;
 export const paused = () => stopped;
@@ -12,12 +14,17 @@ function line(text) {
 async function action(action, params = {}) {
   const r = await fetch('/api/control', { method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ action, ...params }) });
-  if (!r.ok) throw Error('ጥያቄው አልተሳካም። ስሙን፣ ፈቃዱንና የአጋዡን ሁኔታ ያረጋግጡ።');
+  if (!r.ok) {
+    const failure=await r.json();
+    throw Error(failure.error==='stale'?'ፋይሉ ተቀይሯል። እንደገና ይምረጡት።':'ጥያቄው አልተሳካም። ስሙን፣ ፈቃዱንና የአጋዡን ሁኔታ ያረጋግጡ።');
+  }
   return r.json();
 }
 function message(text) { $('work-message').textContent = text; }
 async function decide(id, decision) {
-  try { await action(decision,{id}); message(decision === 'approve' ? 'ፋይሉ ተቀምጧል።' : 'ጥያቄው ውድቅ ሆኗል።'); }
+  try { await action(decision,{id}); message(decision === 'approve' ? 'ፋይሉ ተቀምጧል።' : 'ጥያቄው ውድቅ ሆኗል።');
+    if(decision==='approve'&&codeFile){const s=await action('code.read');if(s.text!==codeFile.text)loadCode(s);}
+  }
   catch(e) { message(e.message); }
   await refresh();
 }
@@ -29,6 +36,22 @@ async function refresh() {
   $('agent-pause').textContent = stopped ? 'ቀጥል · Resume' : 'አቁም · Pause';
   document.dispatchEvent(new Event('controlchange'));
   $('quiet-hours').checked = s.quiet;
+  $('code-undo').disabled=!s.canUndo;
+  $('desktop-enabled').checked=s.desktopEnabled;
+  $('desktop-list').disabled=!s.desktopEnabled;
+  if(!s.desktopEnabled)$('desktop-window').replaceChildren();
+  $('desktop-propose').disabled=!s.desktopEnabled||!$('desktop-window').value;
+  if(!s.codeTarget){codeFile=null;$('code-edit').hidden=true;}
+  $('mcp-list').replaceChildren(...s.connections.map(c=>{
+    const box=document.createElement('article');
+    box.append(line(c.name+' · '+c.url),line(!c.enabled?'ተዘግቷል':!c.checked?'ገና አልተፈተሸም':c.error?'ግንኙነት አልተሳካም':'ተገናኝቷል'),
+      line((c.tools??[]).join(', ')));
+    if(c.checked)box.append(line(new Date(c.checked).toLocaleString()+' · '+c.capabilities.join(', ')));
+    if(c.enabled)box.append(button('መሣሪያዎችን ፈትሽ',()=>mcpAction('mcp.check',c.id)));
+    box.append(button(c.enabled?'አሰናክል':'አንቃ',()=>mcpAction('mcp.toggle',c.id)),
+      button('አስወግድ',()=>{if(confirm('ግንኙነቱ ይወገድ?'))mcpAction('mcp.remove',c.id)}));
+    return box;
+  }));
   $('reminders').replaceChildren(...s.reminders.map(r=>{
     const box=document.createElement('article');
     box.append(line(r.title),line(r.next ? new Date(r.next).toLocaleString() : 'ደርሷል'));
@@ -39,6 +62,10 @@ async function refresh() {
   $('approval-list').replaceChildren(...s.approvals.map(item => {
     const box = document.createElement('article');
     const body = document.createElement('pre'); body.textContent = item.text;
+    if(item.tool==='code.replace'){
+      const old=document.createElement('pre');old.textContent=item.before;
+      box.append(line('የአሁኑ ይዘት'),old,line('የታቀደ ይዘት'));
+    }
     box.append(line(item.agent+' · '+item.tool+' · '+item.risk),line(item.target),
       line('የፈቃዱ መጨረሻ · '+new Date(item.expires).toLocaleTimeString()),body,
       button('ፍቀድ',()=>decide(item.id,'approve')),button('ውድቅ አድርግ',()=>decide(item.id,'reject')));
@@ -204,4 +231,72 @@ $('screen-attach').onclick=()=>{
   if($('attachment').files.length&&!confirm('ያለው አባሪ በጽሑፉ ይተካ?'))return;
   const dt=new DataTransfer();dt.items.add(file);$('attachment').files=dt.files;
   $('work').close();$('message').focus();
+};
+let codeFile=null;
+async function mcpAction(name,id){
+  try{await action(name,{id});message('ተጠናቋል።');}catch(e){message(e.message)}await refresh();
+}
+$('mcp-add').onsubmit=async e=>{
+  e.preventDefault();try{await action('mcp.add',{name:$('mcp-name').value,url:$('mcp-url').value});e.target.reset();await refresh();}
+  catch(err){message(err.message)}
+};
+function loadCode(snapshot){
+  codeFile=snapshot;
+  $('code-target').textContent=snapshot.target;
+  $('code-content').value=snapshot.text;
+  $('code-edit').hidden=false;
+}
+$('code-pick').onclick=async()=>{
+  const b=$('code-pick');b.disabled=true;
+  try{const s=await action('code.pick');if(!s.cancelled){loadCode(s);await refresh();}}
+  catch(e){message(e.message)}finally{b.disabled=false}
+};
+$('code-revoke').onclick=async()=>{try{await action('code.close');await refresh()}catch(e){message(e.message)}};
+$('code-undo').onclick=async()=>{try{await action('code.undo',{grant:codeFile.id??codeFile.grant});await refresh();$('approval-list').scrollIntoView()}catch(e){message(e.message)}};
+$('code-check').onclick=async()=>{
+  if(!codeFile)return;
+  try{
+    const result=await action('code.check',{grant:codeFile.grant,text:$('code-content').value});
+    message(result.valid?'Syntax ✓':'Syntax ✗ '+(result.line?' · መስመር '+result.line:''));
+  }catch(e){message(e.message)}
+};
+$('code-propose').onclick=async()=>{
+  if(!codeFile)return;
+  let text=$('code-content').value;
+  if(!codeFile.text.replaceAll('\r\n','').includes('\n') && codeFile.text.includes('\r\n'))text=text.replace(/\r?\n/g,'\r\n');
+  if(codeFile.text.startsWith('\ufeff')&&!text.startsWith('\ufeff'))text='\ufeff'+text;
+  try{await action('code.propose',{grant:codeFile.grant,before:codeFile.text,text});await refresh();$('approval-list').scrollIntoView();}
+  catch(e){message(e.message)}
+};
+$('code-generate').onclick=async()=>{
+  const file=codeFile, instruction=$('code-instruction').value.trim();
+  if(!file || !instruction){message('የሚፈለገውን ለውጥ ይጻፉ።');return}
+  if(new Blob([file.text]).size>16384){message('ሞዴሉ የሚቀበለው ፋይል እስከ 16 KiB ነው።');return}
+  const b=$('code-generate');b.disabled=true;message('ለውጡን በማዘጋጀት ላይ…');
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-Text-Attachment':'1'},
+      body:JSON.stringify({provider:currentProvider(),attachment:{name:file.target.split(/[\\/]/).pop(),text:file.text},
+        message:'Read the attached source with read_attached_text. Apply this requested edit. Return the complete replacement file in one fenced code block. Preserve unrelated code. Request: '+instruction,conversation:null})});
+    if(!r.ok)throw Error();
+    const result=await r.json();
+    if(result.tool!=='read_attached_text'||file!==codeFile)throw Error();
+    const match=/^\s*`{3}[^\n]*\n([\s\S]*?)\r?\n`{3}\s*$/.exec(result.reply);
+    if(!match)throw Error();
+    $('code-content').value=match[1]+(file.text.endsWith('\n')?'\n':'');
+    message('የታቀደውን ይዘት ይገምግሙ።');
+  }catch{message('የተሟላ ለውጥ አልተገኘም። እንደገና ይሞክሩ ወይም በእጅ ያርሙ።')}
+  finally{b.disabled=false}
+};
+$('desktop-enabled').onchange=async e=>{
+  try{await action(e.target.checked?'desktop.enable':'desktop.disable');}catch(err){message(err.message)}await refresh();
+};
+$('desktop-list').onclick=async()=>{
+  try{const result=await action('desktop.list');
+    $('desktop-window').replaceChildren(...result.windows.map(w=>new Option(w.process+' · '+w.title,w.id)));
+    $('desktop-propose').disabled=!result.windows.length;
+  }catch(e){message(e.message)}
+};
+$('desktop-propose').onclick=async()=>{
+  try{await action('desktop.propose',{window:$('desktop-window').value,operation:$('desktop-operation').value});await refresh();$('approval-list').scrollIntoView();}
+  catch(e){message(e.message)}
 };

@@ -8,8 +8,13 @@ import { resolveProvider } from './providers.mjs';
 import { workspaceControl } from './workspace-control.mjs';
 import { referenceSearch } from './reference-search.mjs';
 import { readScreen } from './screen-reader.mjs';
+import { pickSourceFile, checkDraft } from './code-workspace.mjs';
+import { discoverMcp } from './mcp-connections.mjs';
+import { speechModels, transcribe } from './speech.mjs';
+import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+const runtime = resolve(process.env.ASSISTANT_RUNTIME_DIR ?? resolve(root, '.runtime'));
 const loopback = '127.0.0.1';
 const limits = { request: 16384, message: 4000, reply: 64000 };
 const assets = {
@@ -17,10 +22,11 @@ const assets = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/controls.js': ['controls.js', 'text/javascript; charset=utf-8'],
+  '/voice.js': ['voice.js','text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal) {
+export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta) {
   const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE } = process.env;
   const { base: ASSISTANT_MODEL_URL, model: ASSISTANT_MODEL_ID, key } = provider ?? {};
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
@@ -28,15 +34,15 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
   }
   return new Promise((accept, reject) => {
     const child = spawn(ASSISTANT_PYTHON, ['-I', '-B', resolve(root, 'hermes_worker.py')], {
-      cwd: resolve(root, '.runtime'),
+      cwd: runtime,
       env: {
         SystemRoot: process.env.SystemRoot,
         PATH: process.env.SystemRoot ? resolve(process.env.SystemRoot, 'System32') : '/usr/bin:/bin',
-        TEMP: resolve(root, '.runtime'),
-        TMP: resolve(root, '.runtime'),
-        HOME: resolve(root, '.runtime'),
-        USERPROFILE: resolve(root, '.runtime'),
-        HERMES_HOME: resolve(root, '.runtime', 'hermes'),
+        TEMP: runtime,
+        TMP: runtime,
+        HOME: runtime,
+        USERPROFILE: runtime,
+        HERMES_HOME: resolve(runtime, 'hermes'),
         HERMES_DISABLE_LAZY_INSTALLS: '1',
         ASSISTANT_TEST_WORKER_LOG: process.env.ASSISTANT_TEST_WORKER_LOG,
         ASSISTANT_HERMES_SOURCE,
@@ -49,19 +55,28 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
       stdio: ['pipe', 'pipe', process.env.ASSISTANT_TEST_WORKER_LOG === '1' ? 'inherit' : 'ignore'],
       timeout: 180000,
     });
-    const chunks = [];
+    let buffer='', final;
     let size = 0;
+    child.stdout.setEncoding('utf8');
     child.stdout.on('data', chunk => {
-      size += chunk.length;
-      if (size > limits.reply) child.kill();
-      else chunks.push(chunk);
+      size += Buffer.byteLength(chunk);
+      if (size > (onDelta?512000:limits.reply)) {child.kill();return}
+      buffer+=chunk;
+      for(let end; (end=buffer.indexOf('\n'))!==-1;){
+        const line=buffer.slice(0,end);buffer=buffer.slice(end+1);
+        try{
+          const item=JSON.parse(line);
+          if(typeof item.delta==='string')onDelta?.(item.delta);
+          else final=item;
+        }catch{child.kill();reject(Error('Invalid worker event'));return}
+      }
     });
     child.stdin.on('error', reject);
     child.on('error', reject);
     child.on('close', code => {
       try {
-        if (code !== 0 || size > limits.reply) throw new Error('Hermes run failed.');
-        const { reply, attachmentRead } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (code !== 0 || !final || buffer.trim()) throw new Error('Hermes run failed.');
+        const { reply, attachmentRead } = final;
         if (typeof reply !== 'string' || !reply.trim()) throw new Error('Invalid Hermes response.');
         if (attachment && attachmentRead) onRead?.();
         accept(reply);
@@ -69,20 +84,22 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message, history, attachment }));
+    child.stdin.end(JSON.stringify({ message, history, attachment,stream:!!onDelta }));
   });
 }
 
-export function createAssistant({ reply = hermesReply, stateDirectory = resolve(root, '.runtime', 'product') } = {}) {
+export function createAssistant({ reply = hermesReply, stateDirectory = resolve(runtime, 'product'), pickFile = pickSourceFile } = {}) {
   const control = workspaceControl(stateDirectory);
   const session = randomUUID();
   const conversations = new Map();
+  let sampleTicket;
   const server = createServer({ requestTimeout: 10000, headersTimeout: 5000 }, async (req, res) => {
     const authority = loopback + ':' + server.address().port;
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const json = (status, data) => {
+      if(res.headersSent){res.end(JSON.stringify({status,...data})+'\n');return;}
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
     };
@@ -103,13 +120,14 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     const managing = req.url === '/api/control';
     const searching = req.url === '/api/research';
     const capturing = req.url === '/api/screen/read';
-    if (req.method !== 'POST' || (!testing && !managing && !searching && !capturing && req.url !== '/api/chat')) return json(404, { error: 'route' });
+    const hearing = req.url === '/api/voice/benchmark';
+    if (req.method !== 'POST' || (!testing && !managing && !searching && !capturing && !hearing && req.url !== '/api/chat')) return json(404, { error: 'route' });
     if (req.headers.origin !== 'http://' + authority) return json(403, { error: 'origin' });
     if (!req.headers.cookie?.split(/;\s*/).includes('abyssinia_' + server.address().port + '=' + session)) return json(401, { error: 'session' });
     if (req.headers['content-type'] !== 'application/json') return json(415, { error: 'type' });
 
     const length = Number(req.headers['content-length']);
-    const maxBytes = capturing ? 2800100 : managing || req.headers['x-text-attachment'] === '1' ? 128 * 1024 : limits.request;
+    const maxBytes = capturing ? 2800100 : hearing ? 855000 : managing || req.headers['x-text-attachment'] === '1' ? 128 * 1024 : limits.request;
     if (!Number.isInteger(length) || length < 1 || length > maxBytes) {
       res.setHeader('Connection', 'close');
       return json(413, { error: 'size' });
@@ -123,19 +141,75 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       if (managing) {
-        try { return json(200, control.execute(data)); }
-        catch (error) { return json(409, { error: ['invalid','expired','write_failed'].includes(error.message) ? error.message : 'unavailable' }); }
+        if(data?.action==='voice.output')return json(200,{configured:!!process.env.ABYSSINIA_TTS_KEY,candidates,voices,speechScript,reviewed:control.reviewedVoice});
+        if(data?.action==='voice.rate'){
+          if(!sampleTicket||data.ticket!==sampleTicket.id||sampleTicket.expires<Date.now()||data.native!==true)return json(409,{error:'review'});
+          try{
+            const result=control.reviewVoice(sampleTicket.model,sampleTicket.voice,data.naturalness,data.clarity);
+            sampleTicket=null;return json(200,result);
+          }catch{return json(409,{error:'review'})}
+        }
+        if(data?.action==='voice.sample'||data?.action==='voice.speak'){
+          const sample=data.action==='voice.sample';
+          const pair=sample?data:control.reviewedVoice;
+          if(!pair||!process.env.ABYSSINIA_TTS_KEY)return json(409,{error:'unavailable'});
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try{
+            const audio=await synthesize(sample?speechScript:data.text,pair.model,pair.voice,signal);
+            signal.throwIfAborted();control.record(data.action,'completed',pair.model+'/'+pair.voice);
+            if(sample)sampleTicket={id:randomUUID(),model:pair.model,voice:pair.voice,expires:Date.now()+600000};
+            return json(200,{audio,...(sample&&{ticket:sampleTicket.id})});
+          }catch{return json(502,{error:'speech'})}
+          finally{control.end()}
+        }
+        if(data?.action==='voice.models')return json(200,{models:speechModels()});
+        if(data?.action==='mcp.check'){
+          let connection;
+          try{connection=control.connection(data.id)}catch{return json(409,{error:'unavailable'})}
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try {
+            const result=await discoverMcp(connection.url,signal);
+            signal.throwIfAborted();control.discovery(connection.id,{...result,error:false});
+            return json(200,{ok:true});
+          }catch{control.discovery(connection.id,{error:true,tools:[],capabilities:[]});return json(502,{error:'mcp'});}
+          finally{control.end();}
+        }
+        if(data?.action==='code.check'){
+          const snapshot=control.execute({action:'code.read'});
+          if(snapshot.grant!==data.grant)return json(409,{error:'unavailable'});
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try{
+            const result=await checkDraft(snapshot.target,data.text,signal);
+            control.record('code.check',result.valid?'passed':'failed',snapshot.target);
+            return json(200,result);
+          }catch{return json(400,{error:'unsupported'})}finally{control.end()}
+        }
+        if (data?.action==='code.pick') {
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try {
+            const path=await pickFile(signal);
+            signal.throwIfAborted();
+            return json(200,path?control.grantFile(path):{cancelled:true});
+          }catch{return json(409,{error:'picker'});}
+          finally{control.end();}
+        }
+        try { return json(200, await control.execute(data)); }
+        catch (error) { return json(409, { error: ['invalid','expired','stale','write_failed'].includes(error.message) ? error.message : 'unavailable' }); }
       }
-      if (searching || capturing) {
+      if (searching || capturing || hearing) {
         if (control.paused) return json(423,{error:'paused'});
         const signal = control.begin();
         if (!signal) return json(429,{error:'busy'});
         try {
-          const result = capturing ? await readScreen(data.image,signal) : {sources:await referenceSearch(data.query,data.language,signal)};
+          const result = hearing ? await transcribe(data.pcm,data.model,signal) : capturing ? await readScreen(data.image,signal) : {sources:await referenceSearch(data.query,data.language,signal)};
           signal.throwIfAborted();
-          control.record(capturing?'screen.read':'research','completed'); return json(200,result);
+          control.record(hearing?'speech.transcribe':capturing?'screen.read':'research','completed'); return json(200,result);
         } catch (error) {
-          control.record(capturing?'screen.read':'research',signal.aborted?'interrupted':'failed');
+          control.record(hearing?'speech.transcribe':capturing?'screen.read':'research',signal.aborted?'interrupted':'failed');
           return json(signal.aborted?423:error.message==='invalid'?400:502,{error:capturing?'screen':'research'});
         } finally {control.end();}
       }
@@ -165,7 +239,13 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       const route = JSON.stringify([provider?.base, provider?.model]);
       if (prior && prior.route !== route) return json(409, { error: 'provider_changed' });
       let read = false;
-      const answer = await reply(message, prior?.turns ?? [], provider, attachment, () => { read = true; }, signal);
+      let onDelta;
+      if(!testing && req.headers.accept==='application/x-ndjson'){
+        res.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8'});
+        res.write(JSON.stringify({state:'thinking'})+'\n');
+        onDelta=delta=>{if(!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
+      }
+      const answer = await reply(message, prior?.turns ?? [], provider, attachment, () => { read = true; }, signal,onDelta);
       signal.throwIfAborted();
       if (read) control.record('attachment.read', 'completed');
       control.record(action, 'completed');

@@ -1,3 +1,4 @@
+import { speechReady, speakAnswer, stopSpeech } from './voice.js';
 import { currentProvider, providerLabel } from './settings.js';
 import { proposeDocument, paused } from './controls.js';
 const form = document.querySelector('#composer');
@@ -68,6 +69,11 @@ function makeMessage(role, text) {
     save.textContent = 'በፋይል አስቀምጥ';
     save.onclick = () => proposeDocument(text);
     card.append(save);
+    if(speechReady() && text.length<=2000){
+      const read=document.createElement('button');read.textContent='በድምፅ አንብብ';read.onclick=()=>speakAnswer(text);
+      const stop=document.createElement('button');stop.textContent='ድምፅ አቁም';stop.onclick=stopSpeech;
+      card.append(read,stop);
+    }
   }
   return card;
 }
@@ -84,6 +90,10 @@ function render() {
   status.textContent = waiting ? 'መልስ በማዘጋጀት ላይ…' : active.error;
   messages.replaceChildren(...active.entries.map(({ role, text }) => makeMessage(role, text)));
   if (waiting) messages.append(makeMessage('user', pending.text));
+  if(waiting && pending.partial) {
+    const draft=document.createElement('article');draft.className='assistant';
+    const p=document.createElement('p');p.textContent=pending.partial;draft.append(p);messages.append(draft);
+  }
   renderHistory();
   document.querySelector('#forget-chat').hidden=!chats.includes(active)||pending?.chat===active;
   updateSend();
@@ -149,13 +159,30 @@ form.addEventListener('submit', async event => {
     const attachment = file ? { name: file.name, text: new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()) } : undefined;
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(file && { 'X-Text-Attachment': '1' }) },
+      headers: { 'Content-Type': 'application/json', Accept:'application/x-ndjson', ...(file && { 'X-Text-Attachment': '1' }) },
       body: JSON.stringify({ message: text, conversation: chat.conversation ?? null, provider, attachment }),
     });
     if (response.status === 410) throw new Error('expired');
     if (response.status === 423) throw new Error('paused');
     if (!response.ok) throw new Error('Chat failed');
-    const { reply, conversation, tool } = await response.json();
+    let result;
+    if(response.headers.get('content-type')?.includes('application/x-ndjson')){
+      const reader=response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer='';
+      while(true){
+        const {value,done}=await reader.read();if(done)break;buffer+=value;
+        let changed=false;
+        for(let end;(end=buffer.indexOf('\n'))!==-1;){
+          const event=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);
+          if(typeof event.delta==='string'){pending.partial=(pending.partial??'')+event.delta;changed=true;}
+          else if(event.status)result=event;
+        }
+        if(changed && active===chat)render();
+      }
+      if(result?.status===423)throw Error('paused');
+      if(result?.status!==200)throw Error('Incomplete stream');
+    }else result=await response.json();
+    const { reply, conversation, tool } = result;
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
     const activity = tool === 'read_attached_text' ? '\n📄 አንብቧል · Read ' + file.name : '';
     chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply });
@@ -179,5 +206,6 @@ form.addEventListener('submit', async event => {
 });
 
 document.addEventListener('providerchange', render);
+document.addEventListener('speechready', render);
 document.addEventListener('controlchange', updateSend);
 render();
