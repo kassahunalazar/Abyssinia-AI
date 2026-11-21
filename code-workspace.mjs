@@ -6,8 +6,12 @@ import { spawn } from 'node:child_process';
 const allowed = new Set('.js .mjs .cjs .ts .tsx .jsx .py .css .html .go .rs .java .c .cpp .h .cs .md .txt'.split(' '));
 const limit = 64 * 1024;
 
+export function isSourceFile(path) {
+  return allowed.has(extname(path).toLowerCase());
+}
+
 export function snapshotFile(path, identity) {
-  if (!isAbsolute(path) || !allowed.has(extname(path).toLowerCase()) || basename(path).startsWith('.') ||
+  if (!isAbsolute(path) || !isSourceFile(path) || basename(path).startsWith('.') ||
       resolve(path).split(/[\\/]/).some(p => ['.git','.runtime','node_modules','.ssh'].includes(p.toLowerCase())) ||
       realpathSync(path) !== resolve(path)) throw Error('invalid');
   const stat = lstatSync(path);
