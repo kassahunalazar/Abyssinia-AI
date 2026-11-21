@@ -1,130 +1,238 @@
-const field=id=>document.getElementById(id);
-const panel=field('voice-panel');
-const state=field('voice-state');
-const record=field('voice-record'), stop=field('voice-stop'), run=field('voice-run');
-const model=field('voice-model'), transcript=field('voice-transcript');
-field('open-voice').onclick=()=>{
-  field('work-open').click();
-  panel.open=true;
-  panel.scrollIntoView({block:'start'});
-};
-let recorder, pcm, timer, generation=0;
-let grantedModels=[];
-async function post(path,data){
-  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  if(!r.ok)throw Error();
-  return r.json();
+const field = id => document.getElementById(id);
+const dictate = field('dictate');
+const narrate = field('open-voice');
+const state = field('voice-state');
+const model = field('voice-model');
+const speed = field('voice-speed');
+const player = field('tts-player');
+const status = field('tts-status');
+const lesson = field('tts-rating');
+let recording, capture, speech, audioUrl, ticket;
+let modelReady = false, approved = false, narration = false;
+
+function saved(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
 }
-panel.ontoggle=async()=>{
-  if(!panel.open || grantedModels.length)return;
-  try {
-    const {models}=await post('/api/control',{action:'voice.models'});
-    grantedModels=models; model.replaceChildren(...models.map(m=>new Option(m,m)));
-    record.disabled=!models.length||!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder;
-    state.textContent=record.disabled?'የቀረጻ ሞዴል ወይም ማይክሮፎን አይገኝም።':'እስከ 15 ሰከንድ · በዚህ ኮምፒውተር ይሰራል።';
-  }catch{state.textContent='የድምፅ ሞዴሎችን መጫን አልተቻለም።'}
-};
-function stopRecording(){if(recorder?.state==='recording')recorder.stop();}
-stop.onclick=stopRecording;
-document.getElementById('work').addEventListener('close',()=>{generation++;stopRecording();pcm=null;run.disabled=true;transcript.value='';});
-record.onclick=async()=>{
-  record.disabled=true; run.disabled=true; pcm=null; transcript.value='';
-  const id=++generation;let stream;
-  try{
-    const status=await post('/api/control',{action:'heartbeat'});if(status.paused)throw Error();
-    stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    if(id!==generation){stream.getTracks().forEach(t=>t.stop());record.disabled=false;return}
-    const chunks=[];recorder=new MediaRecorder(stream);
-    recorder.ondataavailable=e=>chunks.push(e.data);
-    recorder.onstop=async()=>{
-      clearTimeout(timer);stream.getTracks().forEach(t=>t.stop());stop.disabled=true;
-      let context;
-      try{
-        if(id!==generation)return;
-        context=new AudioContext();
-        const audio=await context.decodeAudioData(await new Blob(chunks).arrayBuffer());
-        const length=Math.min(320000,Math.ceil(audio.duration*16000));
-        const offline=new OfflineAudioContext(1,length,16000);
-        const source=offline.createBufferSource();source.buffer=audio;source.connect(offline.destination);source.start();
-        const values=(await offline.startRendering()).getChannelData(0);
-        const raw=Int16Array.from(values,v=>Math.round(Math.max(-1,Math.min(1,v))*32767));
-        const bytes=new Uint8Array(raw.buffer);let encoded='';
-        for(let pos=0;pos<bytes.length;pos+=8192)encoded+=String.fromCharCode(...bytes.subarray(pos,pos+8192));
-        if(id!==generation)return;
-        pcm=btoa(encoded);run.disabled=false;state.textContent='ቀረጻው ዝግጁ ነው።';
-      }catch{state.textContent='ቀረጻውን ማንበብ አልተቻለም።'}finally{await context?.close();record.disabled=false}
-    };
-    recorder.start(); stop.disabled=false; state.textContent='🔴 በመቅረጽ ላይ…';timer=setTimeout(stopRecording,15000);
-  }catch{stream?.getTracks().forEach(t=>t.stop());record.disabled=false;state.textContent='ማይክሮፎኑን ማስጀመር አልተቻለም።'}
-};
-run.onclick=async()=>{
-  const id=generation;run.disabled=true;record.disabled=true;model.disabled=true;transcript.value='';
-  state.textContent='ጽሑፍ በማዘጋጀት ላይ…';
-  try{
-    const result=await post('/api/voice/benchmark',{pcm,model:model.value});
-    if(id===generation){transcript.value=result.text;state.textContent=result.model+' · '+(result.latency/1000).toFixed(1)+' s';}
-  }catch{state.textContent='ድምፁን ወደ ጽሑፍ መቀየር አልተቻለም።'}finally{run.disabled=!pcm;record.disabled=false;model.disabled=false}
-};
-field('voice-use').onclick=()=>{
-  const input=field('message'), text=(input.value+' '+transcript.value.trim()).trim();
-  if(!transcript.value.trim()||text.length>input.maxLength)return;
-  input.value=text;input.dispatchEvent(new Event('input'));field('work').close();input.focus();
-};
-const player=field('tts-player'), ttsStatus=field('tts-status');
-let playbackUrl, ticket, approved=false, playbackRequest=0;
-function stopSpeech(){
-  playbackRequest++;player.pause();player.removeAttribute('src');player.load();
-  if(playbackUrl)URL.revokeObjectURL(playbackUrl);
-  playbackUrl=null;ticket=null;player.hidden=true;field('tts-rating').hidden=true;
+function save(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
 }
-async function outputSettings(){
-  const config=await post('/api/control',{action:'voice.output'});
-  approved=Boolean(config.reviewed && config.configured);
-  field('tts-model').replaceChildren(...config.candidates.map(m=>new Option(m,m)));
-  field('tts-voice').replaceChildren(...config.voices.map(v=>new Option(v,v)));
-  field('tts-script').textContent=config.speechScript;
-  field('tts-sample').disabled=!config.configured;field('tts-disable').hidden=!config.reviewed;
-  ttsStatus.textContent=!config.configured?'የሙከራ ቁልፍ ያስፈልጋል · ABYSSINIA_TTS_KEY':approved?'የተፈቀደ ድምፅ · '+config.reviewed.voice:'የአፍ መፍቻ ተናጋሪ ግምገማ ያስፈልጋል።';
-  document.dispatchEvent(new Event('speechready'));
+function show(text = '') {
+  state.textContent = text;
+  state.hidden = !text;
 }
-export function speechReady(){return approved;}
-async function playRequest(data){
-  stopSpeech();const sequence=playbackRequest;
-  const result=await post('/api/control',data);
-  if(sequence!==playbackRequest)return;
-  const bytes=Uint8Array.from(atob(result.audio),c=>c.charCodeAt(0));
-  playbackUrl=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));player.src=playbackUrl;
-  ticket=result.ticket; player.hidden=false;
+async function post(path, data, signal) {
+  const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data), signal});
+  if (!response.ok) throw Error('Request failed');
+  return response.json();
+}
+const control = (action, data, signal) => post('/api/control', {action, ...data}, signal);
+
+function openSettings() {
+  if (!field('settings').open) field('settings-open').click();
+  field('voice-panel').open = true;
+  field('voice-panel').scrollIntoView({block:'nearest'});
+}
+function stopSpeech() {
+  speech?.abort();
+  speech = null;
+  player.pause();
+  player.removeAttribute('src');
+  player.load();
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = ticket = null;
+  player.hidden = lesson.hidden = true;
+}
+function setNarration(enabled) {
+  narration = enabled;
+  narrate.setAttribute('aria-pressed',String(enabled));
+  if (!enabled) stopSpeech();
+}
+async function loadSettings() {
+  const [input, output] = await Promise.all([control('voice.models'), control('voice.output')]);
+  function choices(select, options, selected) {
+    select.replaceChildren(...options.map(value=>new Option(value,value)));
+    if (options.includes(selected)) select.value = selected;
+  }
+  modelReady = input.models.length > 0;
+  choices(model,input.models,saved('abyssinia-stt'));
+  if (!modelReady) model.add(new Option('ሞዴል አልተጫነም',''));
+  approved = Boolean(output.reviewed && output.configured);
+  if (!approved) setNarration(false);
+  choices(field('tts-model'),output.candidates,output.reviewed?.model);
+  choices(field('tts-voice'),output.voices,output.reviewed?.voice);
+  field('tts-script').textContent = output.speechScript;
+  field('tts-sample').disabled = !output.configured;
+  field('tts-disable').hidden = !output.reviewed;
+  status.textContent = !output.configured?'Gemini ያገናኙ።':approved?'የተመረጠ ድምፅ · '+output.reviewed.voice:'ድምፅ ይምረጡ፣ ያዳምጡና ይገምግሙ።';
+}
+model.onchange = () => save('abyssinia-stt',model.value);
+if (saved('abyssinia-speed')) speed.value = saved('abyssinia-speed');
+speed.onchange = () => {
+  save('abyssinia-speed',speed.value);
+  player.playbackRate = Number(speed.value);
+};
+field('voice-panel').ontoggle = () => {
+  if (field('voice-panel').open) loadSettings().catch(()=>{status.textContent='የድምፅ ቅንብር አልተገኘም።';});
+};
+
+async function play(data) {
+  const job = speech = new AbortController();
+  const result = await control(data.action,data,job.signal);
+  if (speech !== job || job.signal.aborted) return;
+  const bytes = Uint8Array.from(atob(result.audio), c=>c.charCodeAt(0));
+  audioUrl = URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+  player.src = audioUrl;
+  player.playbackRate = Number(speed.value)||1;
+  ticket = result.ticket;
+  player.hidden = !ticket;
   await player.play();
+  return job;
 }
-export async function speakAnswer(text){
-  if(!approved)return;
-  try{await playRequest({action:'voice.speak',text});}
-  catch{field('status').textContent='ድምፁን ማጫወት አልተቻለም።'}
+export async function narrateReply(text) {
+  if (!narration || !approved || recording || capture) return;
+  stopSpeech();
+  const plain = text.replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/\x60{3}[\s\S]*?\x60{3}/g,' ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/^[#>* -]+/gm,'').trim();
+  if (!plain) return;
+  try {
+    let remaining=plain;
+    while (remaining && narration) {
+      const boundary=remaining.length<=1900?remaining.length:Math.max(remaining.lastIndexOf(' ',1900),remaining.lastIndexOf('።',1900)+1,1);
+      const length=boundary<125 && remaining.length>1900?1850:boundary;
+      const job=await play({action:'voice.speak',text:remaining.slice(0,length).trim()});
+      remaining=remaining.slice(length).trim();
+      if(!remaining || !job || job!==speech || job.signal.aborted)break;
+      const signal=job.signal;
+      await new Promise(resolve=>{
+        const done=()=>{player.removeEventListener('ended',done);signal.removeEventListener('abort',done);resolve();};
+        player.addEventListener('ended',done,{once:true});
+        signal.addEventListener('abort',done,{once:true});
+        if(player.ended)done();
+      });
+      if(signal.aborted)break;
+      stopSpeech();
+    }
+  }
+  catch(e) { if (e.name!=='AbortError' && narration) show('መልሱን በድምፅ ማንበብ አልተቻለም።'); }
 }
-export {stopSpeech};
-field('tts-connect').onclick=async()=>{
-  const b=field('tts-connect');b.disabled=true;
-  try{await post('/api/control',{action:'voice.connect'});await outputSettings();}
-  catch{ttsStatus.textContent='የGemini ግንኙነት አልተሳካም።';}
-  finally{b.disabled=false;}
+narrate.onclick = () => {
+  if (!approved) { openSettings(); return; }
+  setNarration(!narration);
+  show(narration?'አዲስ መልሶች በድምፅ ይነበባሉ።':'የመልስ ድምፅ ጠፍቷል።');
 };
-field('tts-sample').onclick=async()=>{
-  field('tts-sample').disabled=true;ttsStatus.textContent='በማዘጋጀት ላይ…';
-  try{await playRequest({action:'voice.sample',model:field('tts-model').value,voice:field('tts-voice').value});ttsStatus.textContent='ያዳምጡና ይገምግሙ።';}
-  catch{ttsStatus.textContent='ድምፁን ማዘጋጀት አልተቻለም።'}
-  finally{field('tts-sample').disabled=false}
+
+function stopRecording() {
+  if (recording?.state==='recording') recording.stop();
+}
+async function encode(chunks) {
+  const context = new AudioContext();
+  try {
+    const audio = await context.decodeAudioData(await new Blob(chunks).arrayBuffer());
+    const offline = new OfflineAudioContext(1,Math.min(320000,Math.ceil(audio.duration*16000)),16000);
+    const source = offline.createBufferSource();
+    source.buffer = audio;
+    source.connect(offline.destination);
+    source.start();
+    const samples = (await offline.startRendering()).getChannelData(0);
+    const raw = Int16Array.from(samples, value=>Math.max(-32768,Math.min(32767,Math.round(value*32768))));
+    return new Uint8Array(raw.buffer).toBase64();
+  } finally { await context.close(); }
+}
+async function toggleDictation() {
+  if (recording?.state==='recording') { stopRecording(); return; }
+  if (capture) return;
+  if (!modelReady) { openSettings(); show('ለድምፅ ጽሑፍ ሞዴል ይምረጡ።'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { show('ማይክሮፎን በዚህ አሳሽ አይገኝም።'); return; }
+  stopSpeech();
+  capture = new AbortController();
+  const job = capture;
+  let stream, context, timer;
+  function release() {
+    clearInterval(timer);
+    stream?.getTracks().forEach(track=>track.stop());
+    context?.close().catch(()=>{});
+    dictate.setAttribute('aria-pressed','false');
+  }
+  try {
+    if ((await control('heartbeat',{},job.signal)).paused) throw Error('Paused');
+    stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    job.signal.throwIfAborted();
+    const chunks=[];
+    recording = new MediaRecorder(stream);
+    recording.ondataavailable = event=>chunks.push(event.data);
+    recording.onerror = () => {job.abort();release();capture=recording=null;show('ቀረጻው አልተሳካም።');};
+    recording.onstop = async () => {
+      release();
+      recording=null;
+      try {
+        job.signal.throwIfAborted();
+        show('ድምፅን ወደ ጽሑፍ በመቀየር ላይ…');
+        const {text} = await post('/api/voice/benchmark',{pcm:await encode(chunks), model:model.value},job.signal);
+        job.signal.throwIfAborted();
+        const input = field('message');
+        const draft = [input.value.trimEnd(),text.trim()].filter(Boolean).join(' ');
+        if (!text.trim() || draft.length > input.maxLength) { show('ጽሑፍ አልተጨመረም።'); return; }
+        input.value = draft;
+        input.dispatchEvent(new Event('input'));
+        show('ጽሑፉን አርመው ይላኩ።');
+        input.focus();
+      } catch(e) { if (e.name!=='AbortError') show('ድምፁን ወደ ጽሑፍ መቀየር አልተቻለም።'); }
+      finally { if (capture===job) capture=null; }
+    };
+    context = new AudioContext();
+    const analyser = context.createAnalyser();
+    context.createMediaStreamSource(stream).connect(analyser);
+    const levels = new Float32Array(analyser.fftSize);
+    const start = performance.now();
+    let lastVoice = 0;
+    timer = setInterval(()=>{
+      analyser.getFloatTimeDomainData(levels);
+      const rms = Math.sqrt(levels.reduce((sum,value)=>sum+value*value,0)/levels.length);
+      const now = performance.now();
+      if (rms>0.012) lastVoice=now;
+      if (now-start>=18000 || (lastVoice && now-lastVoice>=3000)) stopRecording();
+    },100);
+    recording.start();
+    dictate.setAttribute('aria-pressed','true');
+    show('በመቅረጽ ላይ… · Ctrl+B ለማቆም');
+  } catch(e) {
+    release();capture=recording=null;
+    if(e.name!=='AbortError') show('ማይክሮፎኑን ማስጀመር አልተቻለም።');
+  }
+}
+dictate.onclick = toggleDictation;
+document.addEventListener('keydown',event=>{
+  if (event.ctrlKey && !event.repeat && !event.isComposing && event.key.toLowerCase()==='b' && !document.querySelector('dialog[open]')) {
+    event.preventDefault();void toggleDictation();
+  }
+});
+field('agent-pause').addEventListener('click',()=>{
+  stopSpeech();capture?.abort();stopRecording();show();
+});
+field('tts-connect').onclick = async () => {
+  const connect = field('tts-connect'); connect.disabled=true;
+  try { await control('voice.connect');await loadSettings(); }
+  catch { status.textContent='የGemini ግንኙነት አልተሳካም።'; }
+  finally { connect.disabled=false; }
 };
-player.onended=()=>{if(ticket)field('tts-rating').hidden=false;};
-field('tts-model').onchange=field('tts-voice').onchange=stopSpeech;
-field('tts-rating').onsubmit=async e=>{
-  e.preventDefault();try{
-    await post('/api/control',{action:'voice.rate',ticket,native:field('tts-native').checked,naturalness:Number(field('tts-natural').value),clarity:Number(field('tts-clear').value)});
-    e.target.reset();stopSpeech();await outputSettings();
-  }catch{ttsStatus.textContent='የሙከራው ጊዜ አልፏል። እንደገና ይሞክሩ።'}
+field('tts-sample').onclick = async () => {
+  const sample = field('tts-sample');sample.disabled=true;
+  stopSpeech();
+  try { await play({action:'voice.sample',model:field('tts-model').value,voice:field('tts-voice').value}); }
+  catch(e) { if(e.name!=='AbortError') status.textContent='ድምፁን ማዘጋጀት አልተቻለም።'; }
+  finally { sample.disabled=false; }
 };
-field('tts-disable').onclick=async()=>{stopSpeech();await post('/api/control',{action:'voice.disable'});await outputSettings();};
-record.addEventListener('click',stopSpeech);
-field('agent-pause').addEventListener('click',()=>{stopSpeech();stopRecording();});
-field('work').addEventListener('close',stopSpeech);
-outputSettings().catch(()=>{ttsStatus.textContent='የድምፅ ቅንብር አልተገኘም።'});
+player.onended = () => { if(ticket) lesson.hidden=false; };
+field('tts-model').onchange = field('tts-voice').onchange = stopSpeech;
+lesson.onsubmit = async event => {
+  event.preventDefault();
+  try {
+    await control('voice.rate',{ticket,native:field('tts-native').checked,naturalness:Number(field('tts-natural').value),clarity:Number(field('tts-clear').value)});
+    lesson.reset();stopSpeech();await loadSettings();
+  } catch { status.textContent='ናሙናውን ደግመው ያዳምጡ።'; }
+};
+field('tts-disable').onclick = async () => {
+  try { setNarration(false);await control('voice.disable');await loadSettings(); }
+  catch { status.textContent='ድምፁን ማሰናከል አልተቻለም።'; }
+};
+field('settings').addEventListener('close',()=>{if(ticket)stopSpeech();});
+loadSettings().catch(()=>{status.textContent='የድምፅ ቅንብር አልተገኘም።';});

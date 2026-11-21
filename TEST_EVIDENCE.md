@@ -101,3 +101,12 @@ Edge on Windows verified system dark mode, explicit light and dark selections, p
 **BLOCKED / NOT RUN** Live free-provider performance for complex time expressions is unverified. External calendar synchronization and execution with Windows powered off were outside the tested feature.
 **KNOWN LIMITATIONS** The gateway must run to deliver reminders. A browser must be open to see the banner. Ambiguous times require clarification or manual review.
 **NEXT STEP** Evaluate more conversational timing phrases and calendar conventions with native Amharic speakers.
+
+## Amharic interface and scoped capability update
+
+**IMPLEMENTED** Noto Sans Ethiopic, green/yellow/red wordmark, consolidated Voice settings, direct dictation, automatic narration toggle, Skills/Providers/Connectors/Tools/Computer Use controls, provider tool-call test, and recurring reference retrieval.
+**TESTED / PASS** Windows serial suite passed 35 of 35 in 173.9 seconds, zero skips. The installed Hermes harness executed a chat fixture with scoped attachment, reminder, Windows request and tool check schemas. The integration suite confirmed that forged tool/target data did not override a selected MCP connection and approval was required. Scheduled research tests covered pause, recurrence, persisted results and failure. Edge verified desktop and narrow dark layout, loaded the bundled font and checked dictation to editable composer and automatic narration with speech fixtures.
+**FAIL / BLOCKED** Live Gemini audio synthesis still requires a configured key and a reviewed voice. The automated browser run used captured test microphone audio and a fixture transcription/response. The installed Hohe model was separately benchmarked on human Amharic audio.
+**NOT RUN** Live broad browser navigation, desktop text entry and arbitrary connector execution.
+**KNOWN LIMITATIONS** Bundled skills guide a turn. Windows actions cover selected-window focus, page scrolling and user-selected OCR. Connector execution covers approved MCP clock lookup. Narration begins after the reply is complete. Scheduled jobs cover public reference lookup.
+**NEXT STEP** Validate the default live provider with Amharic tool calls and test Gemini narration with a reviewed voice.

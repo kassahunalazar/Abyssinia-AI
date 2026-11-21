@@ -25,7 +25,8 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
     requests.push(body);
     const needTool = body.tools?.length && !body.messages.some(m => m.role === 'tool');
     const toolName=body.tools?.[0]?.function?.name;
-    const args=toolName==='propose_reminder'?JSON.stringify({title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true}):'{}';
+    const args=toolName==='propose_reminder'?JSON.stringify({title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true}):toolName==='request_window_action'?'{"operation":"focus"}':
+      toolName==='confirm_tool_call'?'{"code":"READY"}':'{}';
     const choice = needTool ? { finish_reason:'tool_calls', message:{ tool_calls:[{
       type:'function', id:'read1', function:{name:toolName,arguments:args},
     }] } } : { finish_reason:'stop', message:{content:'fixture answer'} };
@@ -63,6 +64,12 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   assert.equal(draft.reminder.daily,true);
   assert.deepEqual(requests[3].tools.map(t=>t.function.name),['propose_reminder']);
   assert.equal(requests[4].messages.at(-1).role,'tool');
+  const check=await post('/api/chat',{provider,message:'መስኮቱን ወደፊት አምጣ',scope:{name:'desktop',target:'no-active-grant'}});
+  assert.equal(check.status,409);
+  assert.deepEqual(requests[5].tools.map(t=>t.function.name),['request_window_action']);
+  assert.equal(requests[6].messages.at(-1).role,'tool');
   const status=await (await post('/api/control',{action:'status'})).json();
   assert.equal(status.reminders.length,0);
+  assert.equal((await post('/api/provider/test',{provider,mode:'tools'})).status,200);
+  assert.deepEqual(requests[7].tools.map(t=>t.function.name),['confirm_tool_call']);
 });

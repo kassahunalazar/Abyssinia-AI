@@ -1,5 +1,6 @@
+import {selectedCapability,selectCapability} from './capabilities.js';
 import {listsReminders,relativeReminder} from './reminders.js';
-import { speechReady, speakAnswer, stopSpeech } from './voice.js';
+import { narrateReply } from './voice.js';
 import { currentProvider, providerLabel } from './settings.js';
 import { proposeDocument, paused } from './controls.js';
 const form = document.querySelector('#composer');
@@ -57,7 +58,7 @@ function renderHistory() {
   }));
 }
 
-function makeMessage(role, text, reminder) {
+function makeMessage(role, text, reminder, sources, approval) {
   const card = document.createElement('article');
   const heading = document.createElement('strong');
   const content = document.createElement('p');
@@ -72,6 +73,8 @@ function makeMessage(role, text, reminder) {
       review.onclick=()=>{
         document.getElementById('work-open').click();
         const date=new Date(reminder.next);
+        document.getElementById('schedule-kind').value='reminder';
+        document.getElementById('schedule-language').hidden=true;
         document.getElementById('reminder-title').value=reminder.title;
         document.getElementById('reminder-time').value=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,19);
         document.getElementById('reminder-repeat').value=reminder.weekly?'weekly':reminder.daily?'daily':'once';
@@ -80,15 +83,28 @@ function makeMessage(role, text, reminder) {
       };
       card.append(review);
     }
+    if(sources?.length){
+      const list=document.createElement('ul');
+      for(const source of sources){
+        const url=URL.parse(source.url);
+        if(url?.protocol!=='https:')continue;
+        const item=document.createElement('li');
+        const link=document.createElement('a');link.href=url.href;link.textContent=source.title;link.target='_blank';link.rel='noreferrer';
+        const description=document.createElement('p');description.textContent=source.excerpt;
+        item.append(link,description);list.append(item);
+      }
+      card.append(list);
+    }
+    if(approval){
+      const review=document.createElement('button');review.textContent='ፈቃድ ገምግም';
+      review.onclick=()=>{document.getElementById('work-open').click();document.getElementById('approval-list').scrollIntoView();};
+      card.append(review);
+    }
     const save = document.createElement('button');
     save.textContent = 'በፋይል አስቀምጥ';
     save.onclick = () => proposeDocument(text);
     card.append(save);
-    if(speechReady() && text.length<=2000){
-      const read=document.createElement('button');read.textContent='በድምፅ አንብብ';read.onclick=()=>speakAnswer(text);
-      const stop=document.createElement('button');stop.textContent='ድምፅ አቁም';stop.onclick=stopSpeech;
-      card.append(read,stop);
-    }
+
   }
   return card;
 }
@@ -103,7 +119,7 @@ function render() {
   workspace.classList.toggle('in-chat', inChat);
   chatTitle.textContent = inChat ? active.title : '';
   status.textContent = waiting ? 'መልስ በማዘጋጀት ላይ…' : active.error;
-  messages.replaceChildren(...active.entries.map(({ role, text, reminder }) => makeMessage(role, text, reminder)));
+  messages.replaceChildren(...active.entries.map(({ role, text, reminder, sources, approval }) => makeMessage(role, text, reminder, sources, approval)));
   if (waiting) messages.append(makeMessage('user', pending.text));
   if(waiting && pending.partial) {
     const draft=document.createElement('article');draft.className='assistant';
@@ -159,6 +175,8 @@ form.addEventListener('submit', async event => {
   const provider = chat.provider ?? currentProvider();
   if (provider.kind === 'none' && !listsReminders(text) && !relativeReminder(text,Date.now())) { chat.error = 'በቅንብሮች ውስጥ አቅራቢ ይምረጡ። · Choose a provider in Settings.'; render(); return; }
   const file = attachmentInput.files[0];
+  const capability=selectedCapability();
+  if (file && capability.scope) { chat.error='አባሪውን ወይም የተመረጠውን መሣሪያ ያስወግዱ።';render();return; }
   if (file?.size > 16384) { chat.error = 'ፋይሉ ከ16 KB በላይ ነው።'; render(); return; }
   if (!chat.title) {
     chat.title = text.split(/\r?\n/, 1)[0].slice(0, 70);
@@ -175,7 +193,7 @@ form.addEventListener('submit', async event => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept:'application/x-ndjson', ...(file && { 'X-Text-Attachment': '1' }) },
-      body: JSON.stringify({ message: text, conversation: chat.conversation ?? null, provider, attachment }),
+      body: JSON.stringify({ message: text, conversation: chat.conversation ?? null, provider, attachment,...capability }),
     });
     if (response.status === 410) throw new Error('expired');
     if (response.status === 423) throw new Error('paused');
@@ -201,11 +219,13 @@ form.addEventListener('submit', async event => {
     const { reply, conversation, tool } = result;
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
     const activity = tool === 'read_attached_text' ? '\n📄 አንብቧል · Read ' + file.name : '';
-    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply, reminder:result.reminder });
+    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply, reminder:result.reminder, sources:result.sources, approval:result.approval });
     if (active === chat && attachmentInput.files[0] === file) attachmentInput.value = '';
     chat.provider = provider;
     chat.conversation = conversation;
+    selectCapability({});
     saveChats();
+    if (active===chat) void narrateReply(reply);
   } catch (error) {
     chat.error = error.message === 'attachment_unread' ? 'ሞዴሉ አባሪውን አላነበበም። መሣሪያ መጠቀም የሚችል ሞዴል ይምረጡ።' : error.message === 'paused' ? 'ሥራው ቆሟል። ለመቀጠል አጋዡን ያስጀምሩ።' : error.message === 'expired'
       ? 'ይህን ውይይት መቀጠል አይቻልም። እባክዎ አዲስ ውይይት ይጀምሩ።'
@@ -222,6 +242,6 @@ form.addEventListener('submit', async event => {
 });
 
 document.addEventListener('providerchange', render);
-document.addEventListener('speechready', render);
+
 document.addEventListener('controlchange', updateSend);
 render();

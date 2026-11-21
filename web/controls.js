@@ -63,7 +63,7 @@ async function refresh() {
   $('desktop-enabled').checked=s.desktopEnabled;
   $('desktop-list').disabled=!s.desktopEnabled;
   if(!s.desktopEnabled)$('desktop-window').replaceChildren();
-  $('desktop-propose').disabled=!s.desktopEnabled||!$('desktop-window').value;
+  $('desktop-chat').disabled=$('desktop-propose').disabled=!s.desktopEnabled||!$('desktop-window').value;
   if(!s.codeTarget){codeFile=null;$('code-edit').hidden=true;}
   $('mcp-list').replaceChildren(...s.connections.map(c=>{
     const box=document.createElement('article');
@@ -82,6 +82,16 @@ async function refresh() {
   $('reminders').replaceChildren(...s.reminders.map(r=>{
     const box=document.createElement('article');
     box.append(line(r.title),line(r.next ? new Date(r.next).toLocaleString()+(r.weekly?' · በየሳምንቱ':r.daily?' · በየቀኑ':'') : 'ደርሷል'));
+    if(r.job==='research'){
+      box.append(line('የታቀደ የምንጭ ፍለጋ'+(r.last?' · '+new Date(r.last).toLocaleString():'')));
+      if(r.jobResult){
+        box.append(line(r.jobResult.status==='failed'?'ፍለጋው አልተሳካም።':r.jobResult.sources.length?'የተገኙ ምንጮች፦':'ምንጭ አልተገኘም።'));
+        for(const source of r.jobResult.sources){
+          const link=document.createElement('a');link.href=source.url;link.textContent=source.title;link.target='_blank';link.rel='noreferrer';
+          const row=document.createElement('p');row.append(link);box.append(row);
+        }
+      }
+    }
     if(r.status!=='delivered') box.append(button(r.status==='held'?'ቀጥል':'ለአፍታ አቁም',()=>changeReminder(r.status==='held'?'release':'hold',r.id)));
     box.append(button('ሰርዝ',()=>{if(confirm('ደወሉ ይሰረዝ?')) changeReminder('removeReminder',r.id)}));
     return box;
@@ -121,11 +131,12 @@ async function changeReminder(name,id) {
 $('quiet-hours').onchange=async e=>{
   try {await action('quiet',{enabled:e.target.checked}); await refresh();}catch(err){message(err.message)}
 };
+$('schedule-kind').onchange=()=>{$('schedule-language').hidden=$('schedule-kind').value!=='research';};
 $('reminder-form').onsubmit=async e=>{
   e.preventDefault();
   try {
-    await action('schedule',{draft:e.target.dataset.draft,title:$('reminder-title').value,next:new Date($('reminder-time').value).getTime(),daily:$('reminder-repeat').value==='daily',weekly:$('reminder-repeat').value==='weekly'});
-    delete e.target.dataset.draft; e.target.reset(); message('ደወሉ ተመዝግቧል።'); await refresh();
+    await action('schedule',{draft:e.target.dataset.draft,...($('schedule-kind').value==='research'&&{job:'research',language:$('schedule-lang').value}),title:$('reminder-title').value,next:new Date($('reminder-time').value).getTime(),daily:$('reminder-repeat').value==='daily',weekly:$('reminder-repeat').value==='weekly'});
+    delete e.target.dataset.draft; e.target.reset(); $('schedule-kind').onchange(); message('ደወሉ ተመዝግቧል።'); await refresh();
   } catch(err){message(err.message)}
 };
 let latestNotice;
@@ -338,7 +349,7 @@ $('desktop-enabled').onchange=async e=>{
 $('desktop-list').onclick=async()=>{
   try{const result=await action('desktop.list');
     $('desktop-window').replaceChildren(...result.windows.map(w=>new Option(w.process+' · '+w.title,w.id)));
-    $('desktop-propose').disabled=!result.windows.length;
+    $('desktop-chat').disabled=$('desktop-propose').disabled=!result.windows.length;
   }catch(e){message(e.message)}
 };
 $('desktop-propose').onclick=async()=>{

@@ -184,3 +184,83 @@ dialog { background: var(--surface); }
 #theme-setting { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
 select { color: inherit; }
 #open-voice { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 4px 8px; }
+@font-face {
+  font-family: "Abyssinia Ethiopic";
+  src: url("/fonts/NotoSansEthiopic.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+1200-139F,U+2D80-2DDF,U+AB00-AB2F,U+1E7E0-1E7FF;
+}
+:root {
+  font-family: "Abyssinia Ethiopic", "Segoe UI", Nyala, system-ui, sans-serif;
+  --accent: #126354;
+  --accent-wash: #e2f0ec;
+  --shell-shadow: #243b3413;
+  --focus: #0b7563;
+}
+:root[data-theme="dark"] {
+  --accent: #9bdfcf;
+  --accent-wash: #25443e;
+  --shell-shadow: #04090748;
+  --focus: #77ccb9;
+}
+body { grid-template-columns: 248px minmax(0,1fr); }
+aside { padding-inline: 17px; }
+.brand { gap: 9px; margin-bottom: 17px; }
+.brand-mark { flex: none; width: 35px; height: 35px; background: #163a34; color: #f9fffd; }
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px 5px 12px;
+  border-radius: 6px;
+  background: linear-gradient(110deg,#a5dbab 0%,#bce4a6 27%,#fcdf83 36%,#f6cf72 65%,#f5a293 76%,#fbd2bd 100%);
+  color: #172723;
+  white-space: nowrap;
+  font: 750 15px/1.25 "Segoe UI",system-ui,sans-serif;
+  letter-spacing: -.025em;
+}
+.topbar { position: sticky; z-index: 1; top: 0; background: var(--canvas); border-bottom: 1px solid var(--border); }
+.workspace { width: min(800px,calc(100% - 42px)); padding-top: clamp(48px,15vh,150px); }
+.welcome h1 { margin-bottom: 32px; letter-spacing: -.035em; line-height: 1.32; }
+#composer { border: 1px solid var(--border); box-shadow: 0 10px 34px var(--shell-shadow); padding: 5px; border-radius: 23px; }
+.input-panel { border-radius: 18px; border-color: transparent; }
+.input-panel:focus-within { border-color: var(--focus); }
+.input-panel textarea:focus-visible { outline: none; }
+.composer-actions { flex-wrap: wrap; gap: 8px; }
+.composer-control, #open-voice, #active-scope {
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; background: var(--surface); color: var(--text);
+}
+.composer-control[aria-pressed="true"], #open-voice[aria-pressed="true"], #active-scope { background: var(--accent-wash); color: var(--accent); border-color: var(--accent); }
+#dictate[aria-pressed="true"] { border-color: var(--danger-border); color: var(--danger); }
+.voice-state { margin: 0; padding: 0 17px 9px; font-size: .84rem; color: var(--accent); }
+#active-scope { margin: 0 8px 4px 0; }
+#send:not(:disabled) { background: #185649; color: white; }
+#suggestions h2 { text-align: start; }
+.cards button { min-height: 65px; }
+#capabilities { width:min(690px,94vw); max-height:86dvh; color:var(--text); border:1px solid var(--border); border-radius:18px; padding:20px; }
+#capabilities::backdrop { background:#151a24a0; }
+#capabilities header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; }
+#capabilities h2, #capabilities h3 { margin:0; }
+#capabilities h3 { font-size:1rem; }
+#capabilities p { color:var(--muted); margin:.55em 0; overflow-wrap:anywhere; }
+.capability-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.capability-grid section { background:var(--sidebar); padding:13px; border:1px solid var(--border); border-radius:12px; }
+.cap-wide { grid-column:1/-1; }
+.settings-actions { flex-wrap: wrap; }
+#capabilities button, #voice-panel button, #voice-panel select {
+  background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 9px; margin:4px 4px 0 0;
+}
+#voice-panel { margin-top:14px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; }
+summary { cursor:pointer; }
+#voice-panel label { display:block; margin:5px 0; }
+#voice-panel audio { display:block; width:100%; margin-top:8px; }
+#tts-rating { padding:10px; margin-top:8px; border-radius:10px; }
+#messages a { color:var(--accent); }
+@media(max-width:800px){body{grid-template-columns:190px minmax(0,1fr)} .brand{gap:6px} .wordmark{padding-inline:7px}}
+@media(max-width:580px){
+  body {grid-template-columns:minmax(0,1fr)}
+  .workspace {width:calc(100% - 24px); padding-top:50px}
+  .engine {max-width:34%; line-height:1.3}
+  .capability-grid {grid-template-columns:minmax(0,1fr)}
+}

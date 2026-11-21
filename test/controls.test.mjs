@@ -68,3 +68,36 @@ test('reminders honor quiet hours, pause and hold, then deliver once',()=>{
   assert.ok(s.reminders[0].next>clock);assert.equal(s.quiet,true);
   c.execute({action:'removeReminder',id});assert.deepEqual(c.execute({action:'status'}).reminders,[]);
 });
+
+test('scheduled research runs only when due and persists a result or failure',async()=>{
+  let clock=new Date(2026,10,20,10).getTime();
+  const root=mkdtempSync(join(tmpdir(),'abyssinia-job-'));
+  let c=workspaceControl(root,()=>clock);
+  const invoke=action=>c.execute({action});
+  const add=(title,next,daily)=>c.execute({action:'schedule',title,next,daily,job:'research',language:'am'});
+  add('renewable energy',clock+60000,true);
+  const runs=[];
+  const research=async(title,language)=>{
+    runs.push([title,language]);
+    return [{title:'Reference',url:'https://am.wikipedia.org/wiki/Reference'}];
+  };
+  await c.tick(research);
+  assert.equal(runs.length,0);
+  clock+=60000;
+  invoke('pause');
+  await c.tick(research);
+  assert.equal(runs.length,0);
+  invoke('resume');
+  await c.tick(research);
+  c=workspaceControl(root,()=>clock);
+  let [row]=invoke('status').reminders;
+  assert.deepEqual(runs,[['renewable energy','am']]);
+  assert.equal(row.jobResult.sources[0].title,'Reference');
+  assert.equal(new Date(row.next).getDate(),21);
+  add('failure',clock+1000,false);
+  clock+=1000;
+  await c.tick(async()=>{throw Error('test');});
+  row=invoke('status').reminders.find(item=>item.title==='failure');
+  assert.equal(row.jobResult.status,'failed');
+  assert.equal(row.next,null);
+});

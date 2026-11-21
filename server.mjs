@@ -16,6 +16,8 @@ import { askGeminiKey } from './gemini-key.mjs';
 
 import { wantsReminder, listsReminders, relativeReminder, validateDraft } from './web/reminders.js';
 
+import { tools as capabilities, skills, providerProbe } from './web/capability-catalog.js';
+
 const root = fileURLToPath(new URL('.', import.meta.url));
 const runtime = resolve(process.env.ASSISTANT_RUNTIME_DIR ?? resolve(root, '.runtime'));
 const loopback = '127.0.0.1';
@@ -28,10 +30,13 @@ const assets = {
   '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/controls.js': ['controls.js', 'text/javascript; charset=utf-8'],
   '/voice.js': ['voice.js','text/javascript; charset=utf-8'],
+  '/capability-catalog.js': ['capability-catalog.js','text/javascript; charset=utf-8'],
+  '/capabilities.js': ['capabilities.js','text/javascript; charset=utf-8'],
+  '/fonts/NotoSansEthiopic.ttf': ['fonts/NotoSansEthiopic.ttf','font/ttf'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta, onSchedule) {
+export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta, onSchedule, extension) {
   const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE } = process.env;
   const { base: ASSISTANT_MODEL_URL, model: ASSISTANT_MODEL_ID, key } = provider ?? {};
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
@@ -85,12 +90,13 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
         if (typeof reply !== 'string' || !reply.trim()) throw new Error('Invalid Hermes response.');
         if (attachment && attachmentRead) onRead?.();
         if (final.schedule && onSchedule) onSchedule(final.schedule);
+        if (final.proposedAction && extension?.onAction) extension.onAction(final.proposedAction);
         accept(reply);
       } catch (error) {
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message, history, attachment,stream:!!onDelta,schedule:onSchedule?{now:new Date().toISOString(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone}:undefined }));
+    child.stdin.end(JSON.stringify({ message, history, attachment,capability:extension?.capability,skill:extension?.skill,stream:!!onDelta,schedule:onSchedule?{now:new Date().toISOString(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone}:undefined }));
   });
 }
 
@@ -142,6 +148,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     }
     let message;
     let conversation;
+    let scoped, skill, target, testingTools;
     let provider;
     let attachment;
     try {
@@ -173,6 +180,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           if(!pair||!voiceKey())return json(409,{error:'unavailable'});
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
+          res.once('close',()=>{if(!res.writableEnded)control.cancel(signal);});
           try{
             const audio=await synthesize(sample?speechScript:data.text,pair.model,pair.voice,signal,voiceKey());
             signal.throwIfAborted();control.record(data.action,'completed',pair.model+'/'+pair.voice);
@@ -235,9 +243,21 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       provider = resolveProvider(data?.provider);
       const localSchedule=!testing&&!data?.attachment&&(listsReminders(data?.message)||relativeReminder(String(data?.message),Date.now()));
       if (!provider && !localSchedule && (testing || data?.provider !== undefined || reply === hermesReply)) return json(409, { error: 'provider' });
-      message = testing ? 'Reply with OK.' : typeof data?.message === 'string' ? data.message.trim() : '';
+      testingTools=testing && data?.mode==='tools';
+      message = testing ? testingTools?'Call confirm_tool_call with code READY, then reply with OK.':'Reply with OK.' :
+        typeof data?.message === 'string' ? data.message.trim() : '';
       conversation = testing ? undefined : data?.conversation;
       attachment = testing ? undefined : data?.attachment;
+      if(!testing && data?.skill!==undefined){
+        if(typeof data.skill!=='string' || !Object.hasOwn(skills,data.skill))return json(400,{error:'skill'});
+        skill=skills[data.skill].guidance;
+      }
+      if(!testing && data?.scope!==undefined){
+        const name=data.scope?.name;
+        if(attachment || typeof name!=='string' || !Object.hasOwn(capabilities,name))return json(400,{error:'scope'});
+        scoped=name;target=data.scope.target;
+        if(name!=='research' && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
+      }
       if (attachment !== undefined && (typeof attachment?.text !== 'string' ||
           Buffer.byteLength(attachment.text) > 16384 || typeof attachment.name !== 'string' ||
           !attachment.name || attachment.name.length > 255)) return json(400, { error: 'attachment' });
@@ -253,6 +273,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     if (control.paused) return json(423, { error: 'paused' });
     const signal = control.begin();
     if (!signal) return json(429, { error: 'busy' });
+    res.once('close',()=>{if(!res.writableEnded)control.cancel(signal);});
     const action = testing ? 'provider.test' : 'chat';
     try {
       const prior = conversations.get(conversation);
@@ -265,15 +286,32 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         res.write(JSON.stringify({state:'thinking'})+'\n');
         onDelta=delta=>{if(!attachment&&!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
       }
-      const scheduling=!testing&&!attachment&&(wantsReminder(message)||(prior?.awaitingTime&&/ደቂቃ|ሰዓት|ነገ|ጠዋት|ማታ|\b(?:tomorrow|minutes?|hours?|am|pm|noon)\b|\d:\d/iu.test(message)));
+      const scheduling=!testing&&!scoped&&!attachment&&(wantsReminder(message)||(prior?.awaitingTime&&/ደቂቃ|ሰዓት|ነገ|ጠዋት|ማታ|\b(?:tomorrow|minutes?|hours?|am|pm|noon)\b|\d:\d/iu.test(message)));
       let draft=scheduling?relativeReminder(message,Date.now()):undefined;
-      let answer;
-      if(!testing&&!attachment&&listsReminders(message)){
+      let answer, proposal, sources, approval;
+      if(!testing&&!scoped&&!attachment&&listsReminders(message)){
         const active=control.execute({action:'status'}).reminders.filter(r=>r.status!=='delivered').sort((a,b)=>a.next-b.next);
         answer=active.length?active.map(r=>r.title+' · '+new Date(r.next).toLocaleString('am-ET')+(r.weekly?' · በየሳምንቱ':r.daily?' · በየቀኑ':'')+(r.status==='held'?' · ለአፍታ ቆሟል':'')).join('\n'):'የተመዘገበ ማስታወሻ የለም።';
       }else if(!draft){
-        answer=await reply(message,prior?.turns??[],provider,attachment,()=>{read=true;},signal,scheduling?undefined:onDelta,
-          scheduling?candidate=>{draft=validateDraft(candidate,Date.now());}:undefined);
+        answer=await reply(message,prior?.turns??[],provider,attachment,()=>{read=true;},signal,scheduling||scoped?undefined:onDelta,
+          scheduling?candidate=>{draft=validateDraft(candidate,Date.now());}:undefined,
+          {skill,capability:testingTools?providerProbe:scoped?capabilities[scoped]:undefined,onAction:args=>{proposal=args;}});
+      }
+      if(scoped){
+        signal.throwIfAborted();
+        if(!proposal){
+          answer='መሣሪያው ጥቅም ላይ አልዋለም። መሣሪያ ጥሪን የሚደግፍ ሞዴል ይምረጡ።';
+        }else if(scoped==='research'){
+          sources=await referenceSearch(proposal.query,proposal.language,signal);
+          control.record('research','completed');
+          answer=sources.length?'የተገኙ ምንጮች።':'ምንጭ አልተገኘም።';
+        }else{
+          try{
+            approval=scoped==='desktop'?control.execute({action:'desktop.propose',window:target,operation:proposal.operation}):
+              control.execute({action:'mcp.time',id:target,timezone:proposal.timezone});
+          }catch{return json(409,{error:'scope_unavailable'});}
+          answer='እርምጃውን እንዲፈጽም በፈቃድ ጥያቄዎች ውስጥ ይገምግሙ።';
+        }
       }
       if(scheduling){
         if(draft)draft.id=randomUUID();
@@ -287,14 +325,16 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       }
       if (read) control.record('attachment.read', 'completed');
       control.record(action, 'completed');
+      if (testingTools && proposal?.code!=='READY') return json(422,{error:'tool_not_used'});
       if (testing) return json(200, { ok: true, model: provider.model });
-      if (conversation === undefined) return json(200, { reply: answer,...(draft&&{reminder:draft}) });
+      const metadata={...(draft&&{reminder:draft}),...(sources&&{sources}),...(approval&&{approval:approval.id})};
+      if (conversation === undefined) return json(200, { reply: answer,...metadata });
       const id = conversation ?? randomUUID();
       const turns = [...(prior?.turns ?? []), { role: 'user', content: message }, { role: 'assistant', content: answer }];
       conversations.delete(id);
       conversations.set(id, { route, awaitingTime:scheduling&&!draft, turns: turns.slice(-8) });
       if (conversations.size > 32) conversations.delete(conversations.keys().next().value);
-      return json(200, { reply: answer, conversation: id,...(draft&&{reminder:draft}), ...(read && { tool: 'read_attached_text' }) });
+      return json(200, { reply: answer, conversation: id,...metadata, ...(read && { tool: 'read_attached_text' }) });
     } catch {
       control.record(action, signal.aborted ? 'interrupted' : 'failed');
       if (signal.aborted) return json(423, { error: 'paused' });
@@ -304,7 +344,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     }
   });
   const timer = setInterval(() => {
-    try { control.tick(); } catch { console.error('Reminder storage unavailable.'); }
+    void control.tick(referenceSearch).catch(()=>console.error('Reminder storage unavailable.'));
   }, 5000);
   timer.unref();
   server.once('close', () => clearInterval(timer));

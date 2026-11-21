@@ -10,7 +10,7 @@
 </head>
 <body>
   <aside id="sidebar" aria-label="የውይይት ዝርዝር">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">አ</span> Abyssinia AI</div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">አ</span><span class="wordmark" lang="en">Abyssinia AI</span></div>
     <button class="nav-button" id="new-chat"><span class="nav-icon" aria-hidden="true">+</span> አዲስ ውይይት</button>
     <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="ውይይት ፈልግ" placeholder="ውይይት ፈልግ"></label>
     <div class="history">
@@ -21,7 +21,8 @@
     </div>
     <div class="sidebar-footer"><span class="dot" aria-hidden="true"></span> በዚህ ኮምፒውተር</div>
     <button class="nav-button" id="settings-open">⚙ ቅንብሮች · Settings</button>
-    <button class="nav-button" id="work-open">የሥራ ቦታ</button>
+    <button class="nav-button" id="capabilities-open"><span class="nav-icon" aria-hidden="true">⋈</span> ችሎታዎች</button>
+    <button class="nav-button" id="work-open"><span class="nav-icon" aria-hidden="true">▤</span> የሥራ ቦታ</button>
   </aside>
   <main>
     <header class="topbar">
@@ -33,7 +34,7 @@
     <div class="workspace" id="workspace">
       <section class="welcome" id="welcome" aria-labelledby="welcome-title">
         <h1 id="welcome-title">ሰላም፣ ዛሬ ምን ልርዳዎት?</h1>
-        <div class="agent-strip"><span><b aria-hidden="true">አ</b> Abyssinia AI</span></div>
+
       </section>
       <section id="messages" role="log" aria-label="ውይይት" hidden></section>
       <form id="composer">
@@ -41,13 +42,14 @@
           <label class="sr-only" for="message">መልዕክትዎን ይጻፉ</label>
           <textarea id="message" rows="2" maxlength="4000" placeholder="ለአቢሲኒያ AI መልዕክት ይጻፉ…" required></textarea>
           <div class="composer-actions">
-            <button id="open-voice" type="button">ድምፅ · Voice</button>
+            <button id="dictate" class="composer-control" type="button" aria-pressed="false" aria-keyshortcuts="Control+b" title="የድምፅ ጽሑፍ · Ctrl+B"><span aria-hidden="true">◉</span> ተናገር</button>
+            <button id="open-voice" class="composer-control" type="button" aria-pressed="false" title="መልሶችን በድምፅ አንብብ"><span aria-hidden="true">◖))</span> ድምፅ</button>
             <span id="status" role="status"></span>
             <span class="engine">Abyssinia AI</span>
             <button id="send" type="submit" aria-label="ላክ" title="ላክ" disabled>↑</button>
           </div>
-        </div>
-        <div class="composer-footer"><label>ጽሑፍ አያይዝ · Attach text <input id="attachment" type="file" accept=".txt,.md,.csv,.json,.log"></label>
+        <p id="voice-state" class="voice-state" role="status" hidden></p></div>
+        <div class="composer-footer"><button type="button" id="active-scope" hidden></button><label>ጽሑፍ አያይዝ · Attach text <input id="attachment" type="file" accept=".txt,.md,.csv,.json,.log"></label>
         <small>እስከ 16 KB · Sending allows the selected model to read this file for this turn.</small></div>
       </form>
       <section id="suggestions" aria-labelledby="suggestions-title">
@@ -78,34 +80,16 @@
       <label id="url-field" hidden>OpenAI-compatible base URL<input id="provider-url" type="url" placeholder="https://example.com/v1"></label>
       <label id="model-field" hidden>ሞዴል · Model ID<input id="provider-model" maxlength="256"></label>
       <p>ቅንብሩ ለአዲስ ውይይቶች ይውላል። · Applies to new chats.</p>
-      <div class="settings-actions"><button type="button" id="provider-test">ግንኙነቱን ፈትሽ · Test</button><button type="submit">አስቀምጥ · Save</button></div>
+      <div class="settings-actions"><button type="button" id="provider-test">ውይይት ፈትሽ</button><button type="button" id="provider-test-tools">መሣሪያ ፈትሽ</button><button type="submit">አስቀምጥ · Save</button></div>
       <p role="status" id="provider-result"></p>
     </form>
-    <h3>የአጋዡ ችሎታዎች · Capabilities</h3>
-    <dl><dt>የጽሑፍ ውይይት · Chat</dt><dd>Available with a model provider</dd>
-    <dt>Selected text file</dt><dd>Read-only for one turn with a tool-capable model</dd>
-    <dt>የኮድ ክለሳና እርማት</dt><dd>ነጠላ ፋይል · ፈቃድና መልሶ መመለስ</dd>
-    <dt>ማያ ገጽ</dt><dd>ከተመረጠ መስኮት ጽሑፍ ማንበብ · Windows OCR</dd>
-    <dt>የመስኮት ቁጥጥር</dt><dd>በፈቃድ ወደፊት ማምጣትና ገጽ ማንሸራተት</dd>
-    <dt>ማስታወሻ ደወል</dt><dd>አንድ ጊዜ ወይም በየቀኑ · አጋዡ ሲሰራ</dd>
-    <dt>የምንጭ ፍለጋ</dt><dd>ዊኪፔዲያ · አማርኛ / English</dd><dt>MCP</dt><dd>የአካባቢ አገልጋዮችና የመሣሪያዎች ዝርዝር</dd>
-    <dt>የግል ማስታወሻ</dt><dd>በዚህ አሳሽ ይቀመጣል።</dd><dt>ድምፅ</dt><dd>የአማርኛ ሙከራ · የንባብ ድምፅ የተናጋሪ ግምገማ ይጠብቃል።</dd></dl>
-  </dialog>
-  <dialog id="work" aria-labelledby="work-title">
-    <header><h2 id="work-title">የሥራ ቦታ</h2><button id="work-close" aria-label="ዝጋ">×</button></header>
-    <p role="status" id="work-message"></p>
-    <details id="voice-panel"><summary>የአማርኛ ድምፅ ሙከራ</summary>
-      <p>“ሰላም፣ ነገ ጠዋት ስብሰባ አለኝ።” ብለው ይቅረጹ። ተመሳሳይ ድምፅን በሁለቱም ሞዴሎች ይፈትሹ።</p>
-      <button type="button" id="voice-record" disabled>ቅዳ</button><button type="button" id="voice-stop" disabled>ቀረጻ አቁም</button>
-      <label>የድምፅ ማወቂያ · STT <select id="voice-model"></select></label>
-      <button type="button" id="voice-run" disabled>ድምፁን ወደ ጽሑፍ ቀይር</button>
-      <p id="voice-state" role="status"></p><label>ጽሑፉን አርም<textarea id="voice-transcript" rows="3"></textarea></label>
-      <button id="voice-use" type="button">ወደ መልዕክት ቅዳ</button>
-      <h3>የንባብ ድምፅ ግምገማ</h3>
+    <details id="voice-panel"><summary>ድምፅ · Voice</summary>
+      <label>የድምፅ ጽሑፍ ሞዴል <select id="voice-model"></select></label>
+      <label>የንባብ ፍጥነት <select id="voice-speed"><option value="0.85">0.85×</option><option value="1" selected>1×</option><option value="1.15">1.15×</option><option value="1.3">1.3×</option></select></label>
       <p id="tts-script"></p><p id="tts-status" role="status"></p>
       <select id="tts-model" aria-label="የንባብ ሞዴል"></select><select id="tts-voice" aria-label="ድምፅ"></select>
       <button id="tts-connect" type="button">Gemini አገናኝ · Connect Gemini</button>
-      <button id="tts-sample" type="button" disabled>የሙከራ ድምፅ አዘጋጅ</button>
+      <button id="tts-sample" type="button" disabled>የድምፅ ናሙና አዳምጥ</button>
       <audio id="tts-player" controls hidden></audio>
       <form id="tts-rating" hidden>
         <label>ተፈጥሯዊነት (1–5)<input type="number" id="tts-natural" min="1" max="5" required></label>
@@ -115,16 +99,31 @@
       </form>
       <button id="tts-disable" type="button" hidden>ድምፁን አሰናክል</button>
     </details>
-    <details><summary>ግንኙነቶች · MCP</summary>
+  </dialog>
+  <dialog id="capabilities" aria-labelledby="capabilities-title">
+    <header><h2 id="capabilities-title">ችሎታዎች · Capabilities</h2><button id="capabilities-close" aria-label="ዝጋ">×</button></header>
+    <div class="capability-grid">
+      <section><h3>ሞዴል አቅራቢዎች</h3><p id="cap-provider"></p><button id="cap-providers">አቅራቢዎችን አስተዳድር</button></section>
+      <section><h3>ክህሎቶች · Skills</h3><div id="cap-skills"></div></section>
+      <section><h3>ግንኙነቶች · Connectors</h3><div id="cap-connections"></div><button id="cap-connectors">የMCP ቅንብሮች</button></section>
+      <section><h3>መሣሪያዎች · Tools</h3><div id="cap-tools"></div></section>
+      <section class="cap-wide"><h3>ኮምፒውተር አጠቃቀም · Computer use</h3><div id="cap-desktop-status"></div><button id="cap-desktop">መስኮት ምረጥ</button><button id="cap-observe">የማያ ገጽ ጽሑፍ አንብብ</button></section>
+    </div>
+  </dialog>
+  <dialog id="work" aria-labelledby="work-title">
+    <header><h2 id="work-title">የሥራ ቦታ</h2><button id="work-close" aria-label="ዝጋ">×</button></header>
+    <p role="status" id="work-message"></p>
+    <details id="connections-panel"><summary>ግንኙነቶች · MCP</summary>
     <form id="mcp-add"><label>ስም<input id="mcp-name" required maxlength="80"></label>
     <label>የአካባቢ MCP URL<input id="mcp-url" type="url" placeholder="http://127.0.0.1:8080/mcp" required></label><button>አክል</button></form>
     <p>ፈቃድ · መሣሪያዎችን መዘርዘር</p><div id="mcp-list"></div></details>
     <h3>የማያ ገጽ ጽሑፍ አንብብ</h3>
-    <details><summary>የመስኮት ቁጥጥር · Windows</summary>
+    <details id="desktop-panel"><summary>የመስኮት ቁጥጥር · Windows</summary>
       <label><input type="checkbox" id="desktop-enabled">ለእያንዳንዱ እርምጃ ፈቃድ ጠይቅና የመስኮት ቁጥጥርን አንቃ</label>
       <button id="desktop-list" disabled>መስኮቶችን አሳይ</button>
       <select aria-label="መስኮት" id="desktop-window"></select>
       <select aria-label="እርምጃ" id="desktop-operation"><option value="focus">ወደፊት አምጣ</option><option value="scrollDown">አንድ ገጽ ወደታች</option><option value="scrollUp">አንድ ገጽ ወደላይ</option></select>
+      <button id="desktop-chat" disabled>ይህን መስኮት ለውይይት ምረጥ</button>
       <button id="desktop-propose" disabled>ፈቃድ ጠይቅ</button>
     </details>
     <button type="button" id="screen-read">መስኮት ምረጥና አንብብ</button>
@@ -163,8 +162,11 @@
     <input id="memo-search" type="search" placeholder="ማስታወሻ ፈልግ" aria-label="ማስታወሻ ፈልግ">
     <form id="memo-form"><label>ማስታወሻ<textarea id="memo-text" required maxlength="1500"></textarea></label><button>አስቀምጥ</button></form>
     <div id="memo-list"></div>
-    <h3>ማስታወሻ ደወል</h3>
-    <form id="reminder-form"><label>ርዕስ<input id="reminder-title" maxlength="160" required></label>
+    <h3>ቀጠሮዎች · Schedules</h3>
+    <form id="reminder-form">
+      <label>ተግባር <select id="schedule-kind"><option value="reminder">ማስታወሻ ደወል</option><option value="research">የምንጭ ፍለጋ · Wikipedia</option></select></label>
+      <label id="schedule-language" hidden>የምንጭ ቋንቋ <select id="schedule-lang"><option value="am">አማርኛ</option><option value="en">English</option></select></label>
+      <label>ርዕስ<input id="reminder-title" maxlength="160" required></label>
       <label>ቀንና ሰዓት<input id="reminder-time" type="datetime-local" step="1" required></label>
       <label>ድግግሞሽ<select id="reminder-repeat"><option value="once">አንድ ጊዜ</option><option value="daily">በየቀኑ</option><option value="weekly">በየሳምንቱ</option></select></label><button>መዝግብ</button></form>
     <label><input id="quiet-hours" type="checkbox"> ከ22:00 እስከ 07:00 ደወሎችን አዘግይ</label>

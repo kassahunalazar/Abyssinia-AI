@@ -1,4 +1,4 @@
-"""Run a single tool-free turn using the installed Hermes Agent."""
+"""Run a turn with explicitly registered Abyssinia tools."""
 import contextlib
 import json
 import os
@@ -76,7 +76,31 @@ def main():
                 handler=propose_reminder)
             create_custom_toolset("abyssinia_schedule", "Draft one reminder", ["propose_reminder"])
             toolsets.append("abyssinia_schedule")
+        proposed_action = None
+        capability = request.get("capability")
+        if capability:
+            from tools.registry import registry
+            from toolsets import create_custom_toolset
+
+            def request_action(args, **kwargs):
+                nonlocal proposed_action
+                if proposed_action is not None:
+                    return json.dumps({"error": "The turn permits one action request."})
+                proposed_action = args
+                return json.dumps({"status": "Action requested. Report no execution yet."})
+
+            registry.register(name=capability["name"], toolset="abyssinia_action",
+                schema={"name": capability["name"], "description": capability["description"],
+                        "parameters":{"type":"object","properties":capability["properties"],
+                                      "required":list(capability["properties"]),"additionalProperties":False}},
+                handler=request_action)
+            create_custom_toolset("abyssinia_action", "One user-scoped action", [capability["name"]])
+            toolsets.append("abyssinia_action")
         guidance = PROMPT
+        if request.get("skill"):
+            guidance += " Selected skill: " + request["skill"]
+        if capability:
+            guidance += " Use the offered action only as needed to fulfill the user's instruction. The app will report the actual result."
         if timing:
             guidance += (" Current UTC time: " + timing["now"] + ". Local timezone: " + timing["zone"] +
                          ". Use propose_reminder for an unambiguous one-time, weekly or daily reminder. "
@@ -97,14 +121,14 @@ def main():
             quiet_mode=True,
         )
         names = [tool["function"]["name"] for tool in agent.tools]
-        if names != (["read_attached_text"] if attachment is not None else ["propose_reminder"] if timing else []):
+        if names != (["read_attached_text"] if attachment is not None else ["propose_reminder"] if timing else [capability["name"]] if capability else []):
             raise RuntimeError(f"Unexpected Hermes tool permissions: {names!r}")
         result = agent.run_conversation(request["message"], conversation_history=request.get("history", []),
                                         stream_callback=stream_text if request.get("stream") else None)
     reply = result.get("final_response")
     if result.get("failed") or result.get("partial") or not isinstance(reply, str) or not reply.strip():
         raise RuntimeError("Hermes returned no successful reply.")
-    print(json.dumps({"reply": reply, "attachmentRead": attachment_read, "schedule": schedule}, ensure_ascii=False))
+    print(json.dumps({"reply": reply, "attachmentRead": attachment_read, "schedule": schedule, "proposedAction": proposed_action}, ensure_ascii=False))
 
 if __name__ == "__main__":
     if os.environ.get("ASSISTANT_TEST_WORKER_LOG") == "1":

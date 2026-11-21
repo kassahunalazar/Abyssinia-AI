@@ -47,3 +47,11 @@ Open Voice from the composer. For Gemini, select **Connect Gemini** and enter yo
 ## Scheduling from chat
 
 Ask **ከአምስት ደቂቃ በኋላ ውሃ መጠጣት አስታውሰኝ።** Select **Review reminder**, check the title and local time, select once, daily or weekly, then save. Ask **ማስታወሻዎቼን አሳየኝ** to see active reminders. Simple relative requests and listing work locally. For more complex timing, Hermes can call a scoped reminder-drafting tool. Saving requires the user's confirmation. Due reminders appear in the browser while the local gateway runs. This schedules in-app reminders; external calendars and unattended execution of other tools are separate capabilities.
+
+## Voice and capabilities
+
+Use the two controls on the composer. **ተናገር** or Ctrl+B records dictation and inserts the transcript into the editable message. After speech starts, three seconds of silence ends the recording. **ድምፅ** reads new completed replies using the reviewed Gemini voice. Click it again or start dictation to interrupt playback. Settings → Voice contains the transcription model, Gemini connection, voice preview and playback speed.
+
+Open **ችሎታዎች** for model providers, bundled skills, MCP connectors, available chat tools and Windows controls. Select a skill or tool and add your instruction in the composer. Choose a window or connector before asking Hermes for an action against it. Focus, scroll and MCP clock lookup require their own approval. Use the chat and tool tests in Settings to check a provider separately for each capability.
+
+Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, showing the last result and the next run. Keep the local gateway running for scheduled work. The bundled Amharic interface font is Noto Sans Ethiopic, with its SIL Open Font License included under web/fonts.

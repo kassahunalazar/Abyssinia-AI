@@ -57,6 +57,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       return active.signal;
     },
     end() { active = undefined; },
+    cancel(signal) { if(active?.signal===signal) active.abort(); },
     record,
     get reviewedVoice(){return state.reviewedVoice??null;},
     reviewVoice(model,voice,naturalness,clarity) {
@@ -86,12 +87,25 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       record('code.grant','approved',path);
       return {grant:grant.id,target:path,text};
     },
-    tick() {
+    async tick(research) {
       if (state.paused) return;
       const hour = new Date(now()).getHours();
       if (state.quiet && (hour >= 22 || hour < 7)) return;
       const due = (state.reminders ?? []).find(r => r.status === 'scheduled' && r.next <= now());
       if (!due) return;
+      if(due.job==='research'){
+        if(!research || active)return;
+        const signal=this.begin();
+        let result, status='completed';
+        try{result=await research(due.title,due.language,signal);}
+        catch{status='failed';}
+        finally{this.end();}
+        if(signal.aborted || !state.reminders?.some(r=>r.id===due.id && r.status==='scheduled' && r.next===due.next))return;
+        const reminders=state.reminders.map(r=>r.id!==due.id?r:{...r,last:now(),jobResult:{status,sources:result??[]},
+          status:r.daily||r.weekly?'scheduled':'delivered',next:r.daily||r.weekly?nextOccurrence(r.next,now(),r.weekly):null});
+        record('schedule.research',status,due.title,false,{reminders});
+        return;
+      }
       const reminders = state.reminders.map(r => r.id !== due.id ? r : { ...r, last: now(),
         status: r.daily || r.weekly ? 'scheduled' : 'delivered', next: r.daily || r.weekly ? nextOccurrence(r.next, now(), r.weekly) : null });
       record('reminder', 'delivered', due.title, false, { reminders });
@@ -162,7 +176,8 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         }
         if ((data.weekly!==undefined && typeof data.weekly!=='boolean') || (data.daily && data.weekly) || reminders.length >= 100 || typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160 ||
             !Number.isSafeInteger(data.next) || data.next <= now() || data.next > now() + 315576000000 || typeof data.daily !== 'boolean') throw Error('invalid');
-        const r = {id:randomUUID(),draft:data.draft, title:data.title.trim(), next:data.next, daily:data.daily, weekly:!!data.weekly, status:'scheduled'};
+        if(data.job!==undefined && (data.job!=='research' || !['am','en'].includes(data.language)))throw Error('invalid');
+        const r = {id:randomUUID(),...(data.job&&{job:data.job,language:data.language}),draft:data.draft, title:data.title.trim(), next:data.next, daily:data.daily, weekly:!!data.weekly, status:'scheduled'};
         record('reminder','scheduled',r.title,state.paused,{ reminders:[...reminders,r] }); return {id:r.id};
       }
       case 'mcp.time': {

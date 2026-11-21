@@ -20,6 +20,7 @@ function fields() {
   model.value = selected.kind === kind.value ? selected.model ?? '' : defaults[kind.value] ?? '';
   url.value = selected.kind === kind.value ? selected.url ?? '' : '';
   $('provider-test').disabled = kind.value === 'none';
+  $('provider-test-tools').disabled = kind.value === 'none';
   result.textContent = '';
 }
 function draft() {
@@ -44,15 +45,21 @@ $('provider-form').onsubmit = event => {
   document.dispatchEvent(new Event('providerchange'));
   $('settings').close();
 };
-$('provider-test').onclick = async () => {
+async function testProvider(mode) {
   if (!$('provider-form').reportValidity()) return;
   const choice = draft();
+  const buttons=[$('provider-test'),$('provider-test-tools')];
+  buttons.forEach(button=>{button.disabled=true;});
   result.textContent = 'በመፈተሽ ላይ…';
   try {
     const response = await fetch('/api/provider/test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: choice }) });
+      body: JSON.stringify({ provider: choice, mode }) });
     const data = await response.json();
+    if(data.error==='tool_not_used'){result.textContent='ሞዴሉ መሣሪያውን አልጠራም።';return;}
     if (!response.ok) throw Error();
-    result.textContent = 'ተገናኝቷል · Connected · ' + data.model;
+    result.textContent = (mode==='tools'?'መሣሪያው ተጠርቷል · ':'ተገናኝቷል · ') + data.model;
   } catch { result.textContent = 'ሙከራው አልተሳካም · Check the endpoint, model and server credentials.'; }
-};
+  finally { buttons.forEach(button=>{button.disabled=kind.value==='none';}); }
+}
+$('provider-test').onclick = () => testProvider('chat');
+$('provider-test-tools').onclick = () => testProvider('tools');
