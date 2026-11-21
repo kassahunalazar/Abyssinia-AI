@@ -88,3 +88,7 @@ Implemented a one-click Windows launcher for the existing dependencies, browser 
 ## Local Amharic speech comparison
 
 Compared one 6.973-second human recording from [Dataset.ET, training row 83](https://huggingface.co/datasets/snapwre/amharic-speech/viewer/default/train?row=83). Whisper tiny and base produced 12 and 13 word errors respectively against the nine-word reference. Hohe INT8 returned all nine words in Ethiopic script in 43.7 seconds through the app worker. It used ህ where the reference uses ሕ and omitted final punctuation. This one recording measures neither general accuracy nor conversational latency. The installed ONNX weights matched the pinned SHA-256. Gemini native-speaker rating is outstanding.
+
+## Dark theme and Windows preview 7105515
+
+Edge on Windows verified system dark mode, explicit light and dark selections, preference persistence after reload, the workspace dialog, and mobile and desktop layouts with no page errors. The live gateway served the theme script on port 8789. On this build, the concurrent test run passed 30 of 32; two installed-Hermes tests hit worker timeouts. Rerunning the complete suite serially passed all 32 with no skips in 350.1 seconds. The Windows ZIP passed a full archive integrity check and its uploaded GitHub asset matched the local size and SHA-256. Live Gemini synthesis still requires a configured backend key and a listener review.
