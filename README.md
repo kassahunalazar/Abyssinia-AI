@@ -43,3 +43,7 @@ On a new Windows account, the ZIP includes **Setup Abyssinia Engine.cmd**. It ru
 Open Settings → Theme to choose System, Dark or Light. System follows Windows appearance, including changes while the app is open. The browser remembers explicit selections. The palette covers the composer, history, chat messages, dialogs and approval text.
 
 Open Voice from the composer. For Gemini, select **Connect Gemini** and enter your API key in the native Windows password field. The running gateway keeps this key in memory. For persistence you can set ABYSSINIA_TTS_KEY in the backend environment. Generate a sample and rate its naturalness and clarity after listening. Playback requires a native-listener review of that model and voice.
+
+## Scheduling from chat
+
+Ask **ከአምስት ደቂቃ በኋላ ውሃ መጠጣት አስታውሰኝ።** Select **Review reminder**, check the title and local time, select once, daily or weekly, then save. Ask **ማስታወሻዎቼን አሳየኝ** to see active reminders. Simple relative requests and listing work locally. For more complex timing, Hermes can call a scoped reminder-drafting tool. Saving requires the user's confirmation. Due reminders appear in the browser while the local gateway runs. This schedules in-app reminders; external calendars and unattended execution of other tools are separate capabilities.

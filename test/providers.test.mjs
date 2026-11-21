@@ -24,8 +24,10 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
     const body = JSON.parse(Buffer.concat(chunks));
     requests.push(body);
     const needTool = body.tools?.length && !body.messages.some(m => m.role === 'tool');
+    const toolName=body.tools?.[0]?.function?.name;
+    const args=toolName==='propose_reminder'?JSON.stringify({title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true}):'{}';
     const choice = needTool ? { finish_reason:'tool_calls', message:{ tool_calls:[{
-      type:'function', id:'read1', function:{name:'read_attached_text',arguments:'{}'},
+      type:'function', id:'read1', function:{name:toolName,arguments:args},
     }] } } : { finish_reason:'stop', message:{content:'fixture answer'} };
     if (body.stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -56,4 +58,11 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   assert.equal((await post('/api/chat',{message:'again',conversation:first.conversation,provider:{...provider,model:'another'}})).status,409);
   assert.equal((await post('/api/chat',{message:'hello',provider:{kind:'none'}})).status,409);
   assert.equal(requests.length,3);
+  const draft=await (await post('/api/chat',{provider,message:'Remind me daily at noon to check the agenda',conversation:null})).json();
+  assert.equal(draft.reminder.title,'ስብሰባ');
+  assert.equal(draft.reminder.daily,true);
+  assert.deepEqual(requests[3].tools.map(t=>t.function.name),['propose_reminder']);
+  assert.equal(requests[4].messages.at(-1).role,'tool');
+  const status=await (await post('/api/control',{action:'status'})).json();
+  assert.equal(status.reminders.length,0);
 });

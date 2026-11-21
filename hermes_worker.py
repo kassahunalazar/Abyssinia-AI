@@ -57,6 +57,30 @@ def main():
             create_custom_toolset("abyssinia_attachment", "Read this turn's attachment", ["read_attached_text"])
             toolsets.append("abyssinia_attachment")
 
+        schedule = None
+        timing = request.get("schedule")
+        if timing and attachment is None:
+            from tools.registry import registry
+            from toolsets import create_custom_toolset
+
+            def propose_reminder(args, **kwargs):
+                nonlocal schedule
+                schedule = {k: args.get(k) for k in ("title", "when", "daily", "weekly")}
+                return json.dumps({"status": "draft awaiting user review"})
+
+            registry.register(name="propose_reminder", toolset="abyssinia_schedule",
+                schema={"name":"propose_reminder", "description":"Draft a reminder for user confirmation.",
+                        "parameters":{"type":"object","properties":{"title":{"type":"string"},
+                        "when":{"type":"string","description":"Future ISO timestamp with explicit UTC offset"},
+                        "daily":{"type":"boolean"}, "weekly":{"type":"boolean"}},"required":["title","when","daily"],"additionalProperties":False}},
+                handler=propose_reminder)
+            create_custom_toolset("abyssinia_schedule", "Draft one reminder", ["propose_reminder"])
+            toolsets.append("abyssinia_schedule")
+        guidance = PROMPT
+        if timing:
+            guidance += (" Current UTC time: " + timing["now"] + ". Local timezone: " + timing["zone"] +
+                         ". Use propose_reminder for an unambiguous one-time, weekly or daily reminder. "
+                         "Ask for clarification for ambiguous Ethiopian clock conventions or unsupported recurrence.")
         agent = AIAgent(
             provider="custom",
             base_url=os.environ["ASSISTANT_MODEL_URL"],
@@ -66,21 +90,21 @@ def main():
             skip_context_files=True,
             skip_memory=True,
             skip_background_review=True,
-            ephemeral_system_prompt=PROMPT,
+            ephemeral_system_prompt=guidance,
             max_iterations=2,
             max_tokens=1500,
             run_budget_seconds=50,
             quiet_mode=True,
         )
         names = [tool["function"]["name"] for tool in agent.tools]
-        if names != (["read_attached_text"] if attachment is not None else []):
+        if names != (["read_attached_text"] if attachment is not None else ["propose_reminder"] if timing else []):
             raise RuntimeError(f"Unexpected Hermes tool permissions: {names!r}")
         result = agent.run_conversation(request["message"], conversation_history=request.get("history", []),
                                         stream_callback=stream_text if request.get("stream") else None)
     reply = result.get("final_response")
     if result.get("failed") or result.get("partial") or not isinstance(reply, str) or not reply.strip():
         raise RuntimeError("Hermes returned no successful reply.")
-    print(json.dumps({"reply": reply, "attachmentRead": attachment_read}, ensure_ascii=False))
+    print(json.dumps({"reply": reply, "attachmentRead": attachment_read, "schedule": schedule}, ensure_ascii=False))
 
 if __name__ == "__main__":
     if os.environ.get("ASSISTANT_TEST_WORKER_LOG") == "1":

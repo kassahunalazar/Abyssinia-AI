@@ -92,3 +92,12 @@ Compared one 6.973-second human recording from [Dataset.ET, training row 83](htt
 ## Dark theme and Windows preview 7105515
 
 Edge on Windows verified system dark mode, explicit light and dark selections, preference persistence after reload, the workspace dialog, and mobile and desktop layouts with no page errors. The live gateway served the theme script on port 8789. On this build, the concurrent test run passed 30 of 32; two installed-Hermes tests hit worker timeouts. Rerunning the complete suite serially passed all 32 with no skips in 350.1 seconds. The Windows ZIP passed a full archive integrity check and its uploaded GitHub asset matched the local size and SHA-256. Live Gemini synthesis still requires a configured backend key and a listener review.
+
+## Chat scheduling
+
+**IMPLEMENTED** Amharic and English reminder drafting from chat, user confirmation, one-time/daily/weekly recurrence and chat listing.
+**TESTED / PASS** Windows serial suite passed all 33 tests. The installed Hermes harness used propose_reminder against a deterministic tool-calling inference endpoint. A separate Edge run entered an Amharic relative request, reviewed the prefilled draft, changed the time and recurrence, saved it and observed the real due banner in temporary application state.
+**FAIL** No failures in the recorded run.
+**BLOCKED / NOT RUN** Live free-provider performance for complex time expressions is unverified. External calendar synchronization and execution with Windows powered off were outside the tested feature.
+**KNOWN LIMITATIONS** The gateway must run to deliver reminders. A browser must be open to see the banner. Ambiguous times require clarification or manual review.
+**NEXT STEP** Evaluate more conversational timing phrases and calendar conventions with native Amharic speakers.

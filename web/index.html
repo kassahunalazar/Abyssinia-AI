@@ -53,7 +53,7 @@
       <section id="suggestions" aria-labelledby="suggestions-title">
         <h2 id="suggestions-title">በምሳሌ ይጀምሩ</h2>
         <div class="cards">
-          <button type="button" data-prompt="በአዲስ አበባ ለአንድ ቀን የጉብኝት ዕቅድ አዘጋጅልኝ።"><span class="card-icon violet" aria-hidden="true">↗</span><span><strong>ዕቅድ አውጣ</strong><small>የጉብኝት ዕቅድ አዘጋጅ</small></span></button>
+          <button type="button" data-prompt="ከአምስት ደቂቃ በኋላ ውሃ መጠጣት አስታውሰኝ።"><span class="card-icon violet" aria-hidden="true">◷</span><span><strong>ማስታወሻ ያዝ</strong><small>የማስታወሻ ጊዜ ምረጥ</small></span></button>
           <button type="button" data-prompt="ለሥራ ባልደረባዬ አጭር የምስጋና መልዕክት ጻፍልኝ።"><span class="card-icon coral" aria-hidden="true">✎</span><span><strong>ጽሑፍ አዘጋጅ</strong><small>የምስጋና መልዕክት ጻፍ</small></span></button>
           <button type="button" data-prompt="የኢትዮጵያን የቀን አቆጣጠር በቀላሉ አስረዳኝ።"><span class="card-icon blue" aria-hidden="true">◷</span><span><strong>አንድ ነገር ተማር</strong><small>የቀን አቆጣጠርን ተረዳ</small></span></button>
           <button type="button" data-prompt="‘Thank you for taking the time to meet with me’ ወደ ተፈጥሯዊ አማርኛ ተርጉም።"><span class="card-icon green" aria-hidden="true">ሀ</span><span><strong>ተርጉም</strong><small>ከእንግሊዝኛ ወደ አማርኛ</small></span></button>
@@ -165,8 +165,8 @@
     <div id="memo-list"></div>
     <h3>ማስታወሻ ደወል</h3>
     <form id="reminder-form"><label>ርዕስ<input id="reminder-title" maxlength="160" required></label>
-      <label>ቀንና ሰዓት<input id="reminder-time" type="datetime-local" required></label>
-      <label><input id="reminder-daily" type="checkbox"> በየቀኑ</label><button>መዝግብ</button></form>
+      <label>ቀንና ሰዓት<input id="reminder-time" type="datetime-local" step="1" required></label>
+      <label>ድግግሞሽ<select id="reminder-repeat"><option value="once">አንድ ጊዜ</option><option value="daily">በየቀኑ</option><option value="weekly">በየሳምንቱ</option></select></label><button>መዝግብ</button></form>
     <label><input id="quiet-hours" type="checkbox"> ከ22:00 እስከ 07:00 ደወሎችን አዘግይ</label>
     <div id="reminders"></div>
     <h3>የተከናወኑ ተግባራት</h3><ol id="activity-list"></ol>

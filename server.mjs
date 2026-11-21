@@ -14,6 +14,8 @@ import { speechModels, transcribe } from './speech.mjs';
 import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
 import { askGeminiKey } from './gemini-key.mjs';
 
+import { wantsReminder, listsReminders, relativeReminder, validateDraft } from './web/reminders.js';
+
 const root = fileURLToPath(new URL('.', import.meta.url));
 const runtime = resolve(process.env.ASSISTANT_RUNTIME_DIR ?? resolve(root, '.runtime'));
 const loopback = '127.0.0.1';
@@ -21,6 +23,7 @@ const limits = { request: 16384, message: 4000, reply: 64000 };
 const assets = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/reminders.js': ['reminders.js','text/javascript; charset=utf-8'],
   '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
   '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/controls.js': ['controls.js', 'text/javascript; charset=utf-8'],
@@ -28,7 +31,7 @@ const assets = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta) {
+export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta, onSchedule) {
   const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE } = process.env;
   const { base: ASSISTANT_MODEL_URL, model: ASSISTANT_MODEL_ID, key } = provider ?? {};
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
@@ -81,12 +84,13 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
         const { reply, attachmentRead } = final;
         if (typeof reply !== 'string' || !reply.trim()) throw new Error('Invalid Hermes response.');
         if (attachment && attachmentRead) onRead?.();
+        if (final.schedule && onSchedule) onSchedule(final.schedule);
         accept(reply);
       } catch (error) {
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message, history, attachment,stream:!!onDelta }));
+    child.stdin.end(JSON.stringify({ message, history, attachment,stream:!!onDelta,schedule:onSchedule?{now:new Date().toISOString(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone}:undefined }));
   });
 }
 
@@ -229,7 +233,8 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         } finally {control.end();}
       }
       provider = resolveProvider(data?.provider);
-      if (!provider && (testing || data?.provider !== undefined || reply === hermesReply)) return json(409, { error: 'provider' });
+      const localSchedule=!testing&&!data?.attachment&&(listsReminders(data?.message)||relativeReminder(String(data?.message),Date.now()));
+      if (!provider && !localSchedule && (testing || data?.provider !== undefined || reply === hermesReply)) return json(409, { error: 'provider' });
       message = testing ? 'Reply with OK.' : typeof data?.message === 'string' ? data.message.trim() : '';
       conversation = testing ? undefined : data?.conversation;
       attachment = testing ? undefined : data?.attachment;
@@ -260,7 +265,21 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         res.write(JSON.stringify({state:'thinking'})+'\n');
         onDelta=delta=>{if(!attachment&&!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
       }
-      const answer = await reply(message, prior?.turns ?? [], provider, attachment, () => { read = true; }, signal,onDelta);
+      const scheduling=!testing&&!attachment&&(wantsReminder(message)||(prior?.awaitingTime&&/ደቂቃ|ሰዓት|ነገ|ጠዋት|ማታ|\b(?:tomorrow|minutes?|hours?|am|pm|noon)\b|\d:\d/iu.test(message)));
+      let draft=scheduling?relativeReminder(message,Date.now()):undefined;
+      let answer;
+      if(!testing&&!attachment&&listsReminders(message)){
+        const active=control.execute({action:'status'}).reminders.filter(r=>r.status!=='delivered').sort((a,b)=>a.next-b.next);
+        answer=active.length?active.map(r=>r.title+' · '+new Date(r.next).toLocaleString('am-ET')+(r.weekly?' · በየሳምንቱ':r.daily?' · በየቀኑ':'')+(r.status==='held'?' · ለአፍታ ቆሟል':'')).join('\n'):'የተመዘገበ ማስታወሻ የለም።';
+      }else if(!draft){
+        answer=await reply(message,prior?.turns??[],provider,attachment,()=>{read=true;},signal,scheduling?undefined:onDelta,
+          scheduling?candidate=>{draft=validateDraft(candidate,Date.now());}:undefined);
+      }
+      if(scheduling){
+        if(draft)draft.id=randomUUID();
+        answer=draft?'ይህን ማስታወሻ አዘጋጅቻለሁ። ለመመዝገብ ርዕሱንና ሰዓቱን አረጋግጡ። · '+draft.title+' · '+new Date(draft.next).toLocaleString('am-ET',{timeZoneName:'short'}) :
+          'ምን ላስታውስዎት? ቀኑንና ሰዓቱን ወይም ከስንት ደቂቃ በኋላ እንደሆነ ይግለጹ። ማስታወሻው ገና አልተመዘገበም።';
+      }
       signal.throwIfAborted();
       if (attachment && !read) {
         control.record('attachment.read', 'unused');
@@ -269,13 +288,13 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       if (read) control.record('attachment.read', 'completed');
       control.record(action, 'completed');
       if (testing) return json(200, { ok: true, model: provider.model });
-      if (conversation === undefined) return json(200, { reply: answer });
+      if (conversation === undefined) return json(200, { reply: answer,...(draft&&{reminder:draft}) });
       const id = conversation ?? randomUUID();
       const turns = [...(prior?.turns ?? []), { role: 'user', content: message }, { role: 'assistant', content: answer }];
       conversations.delete(id);
-      conversations.set(id, { route, turns: turns.slice(-8) });
+      conversations.set(id, { route, awaitingTime:scheduling&&!draft, turns: turns.slice(-8) });
       if (conversations.size > 32) conversations.delete(conversations.keys().next().value);
-      return json(200, { reply: answer, conversation: id, ...(read && { tool: 'read_attached_text' }) });
+      return json(200, { reply: answer, conversation: id,...(draft&&{reminder:draft}), ...(read && { tool: 'read_attached_text' }) });
     } catch {
       control.record(action, signal.aborted ? 'interrupted' : 'failed');
       if (signal.aborted) return json(423, { error: 'paused' });

@@ -1,3 +1,4 @@
+import {listsReminders,relativeReminder} from './reminders.js';
 import { speechReady, speakAnswer, stopSpeech } from './voice.js';
 import { currentProvider, providerLabel } from './settings.js';
 import { proposeDocument, paused } from './controls.js';
@@ -56,7 +57,7 @@ function renderHistory() {
   }));
 }
 
-function makeMessage(role, text) {
+function makeMessage(role, text, reminder) {
   const card = document.createElement('article');
   const heading = document.createElement('strong');
   const content = document.createElement('p');
@@ -65,6 +66,20 @@ function makeMessage(role, text) {
   content.textContent = text;
   card.append(heading, content);
   if (role === 'assistant') {
+    if(reminder){
+      const review=document.createElement('button');
+      review.textContent='ማስታወሻውን ገምግም · Review reminder';
+      review.onclick=()=>{
+        document.getElementById('work-open').click();
+        const date=new Date(reminder.next);
+        document.getElementById('reminder-title').value=reminder.title;
+        document.getElementById('reminder-time').value=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,19);
+        document.getElementById('reminder-repeat').value=reminder.weekly?'weekly':reminder.daily?'daily':'once';
+        document.getElementById('reminder-form').dataset.draft=reminder.id;
+        document.getElementById('reminder-title').focus();
+      };
+      card.append(review);
+    }
     const save = document.createElement('button');
     save.textContent = 'በፋይል አስቀምጥ';
     save.onclick = () => proposeDocument(text);
@@ -88,7 +103,7 @@ function render() {
   workspace.classList.toggle('in-chat', inChat);
   chatTitle.textContent = inChat ? active.title : '';
   status.textContent = waiting ? 'መልስ በማዘጋጀት ላይ…' : active.error;
-  messages.replaceChildren(...active.entries.map(({ role, text }) => makeMessage(role, text)));
+  messages.replaceChildren(...active.entries.map(({ role, text, reminder }) => makeMessage(role, text, reminder)));
   if (waiting) messages.append(makeMessage('user', pending.text));
   if(waiting && pending.partial) {
     const draft=document.createElement('article');draft.className='assistant';
@@ -142,7 +157,7 @@ form.addEventListener('submit', async event => {
   const text = input.value.trim();
   if (!text || pending || paused()) return;
   const provider = chat.provider ?? currentProvider();
-  if (provider.kind === 'none') { chat.error = 'በቅንብሮች ውስጥ አቅራቢ ይምረጡ። · Choose a provider in Settings.'; render(); return; }
+  if (provider.kind === 'none' && !listsReminders(text) && !relativeReminder(text,Date.now())) { chat.error = 'በቅንብሮች ውስጥ አቅራቢ ይምረጡ። · Choose a provider in Settings.'; render(); return; }
   const file = attachmentInput.files[0];
   if (file?.size > 16384) { chat.error = 'ፋይሉ ከ16 KB በላይ ነው።'; render(); return; }
   if (!chat.title) {
@@ -186,7 +201,7 @@ form.addEventListener('submit', async event => {
     const { reply, conversation, tool } = result;
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
     const activity = tool === 'read_attached_text' ? '\n📄 አንብቧል · Read ' + file.name : '';
-    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply });
+    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply, reminder:result.reminder });
     if (active === chat && attachmentInput.files[0] === file) attachmentInput.value = '';
     chat.provider = provider;
     chat.conversation = conversation;

@@ -81,7 +81,7 @@ async function refresh() {
   }));
   $('reminders').replaceChildren(...s.reminders.map(r=>{
     const box=document.createElement('article');
-    box.append(line(r.title),line(r.next ? new Date(r.next).toLocaleString() : 'ደርሷል'));
+    box.append(line(r.title),line(r.next ? new Date(r.next).toLocaleString()+(r.weekly?' · በየሳምንቱ':r.daily?' · በየቀኑ':'') : 'ደርሷል'));
     if(r.status!=='delivered') box.append(button(r.status==='held'?'ቀጥል':'ለአፍታ አቁም',()=>changeReminder(r.status==='held'?'release':'hold',r.id)));
     box.append(button('ሰርዝ',()=>{if(confirm('ደወሉ ይሰረዝ?')) changeReminder('removeReminder',r.id)}));
     return box;
@@ -124,8 +124,8 @@ $('quiet-hours').onchange=async e=>{
 $('reminder-form').onsubmit=async e=>{
   e.preventDefault();
   try {
-    await action('schedule',{title:$('reminder-title').value,next:new Date($('reminder-time').value).getTime(),daily:$('reminder-daily').checked});
-    e.target.reset(); message('ደወሉ ተመዝግቧል።'); await refresh();
+    await action('schedule',{draft:e.target.dataset.draft,title:$('reminder-title').value,next:new Date($('reminder-time').value).getTime(),daily:$('reminder-repeat').value==='daily',weekly:$('reminder-repeat').value==='weekly'});
+    delete e.target.dataset.draft; e.target.reset(); message('ደወሉ ተመዝግቧል።'); await refresh();
   } catch(err){message(err.message)}
 };
 let latestNotice;

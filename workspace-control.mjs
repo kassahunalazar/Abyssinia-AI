@@ -93,7 +93,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       const due = (state.reminders ?? []).find(r => r.status === 'scheduled' && r.next <= now());
       if (!due) return;
       const reminders = state.reminders.map(r => r.id !== due.id ? r : { ...r, last: now(),
-        status: r.daily ? 'scheduled' : 'delivered', next: r.daily ? nextDay(r.next, now()) : null });
+        status: r.daily || r.weekly ? 'scheduled' : 'delivered', next: r.daily || r.weekly ? nextOccurrence(r.next, now(), r.weekly) : null });
       record('reminder', 'delivered', due.title, false, { reminders });
     },
     execute(data) {
@@ -154,10 +154,15 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         pending.set(item.id,item);record(item.tool,'requested',item.target);return {id:item.id};
       }
       case 'schedule': {
+        if(state.paused)throw Error('unavailable');
         const reminders = state.reminders ?? [];
-        if (reminders.length >= 100 || typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160 ||
+        if(data.draft!==undefined){
+          if(typeof data.draft!=='string'||!/^[-0-9a-f]{36}$/i.test(data.draft))throw Error('invalid');
+          const existing=reminders.find(r=>r.draft===data.draft);if(existing)return {id:existing.id};
+        }
+        if ((data.weekly!==undefined && typeof data.weekly!=='boolean') || (data.daily && data.weekly) || reminders.length >= 100 || typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160 ||
             !Number.isSafeInteger(data.next) || data.next <= now() || data.next > now() + 315576000000 || typeof data.daily !== 'boolean') throw Error('invalid');
-        const r = {id:randomUUID(), title:data.title.trim(), next:data.next, daily:data.daily, status:'scheduled'};
+        const r = {id:randomUUID(),draft:data.draft, title:data.title.trim(), next:data.next, daily:data.daily, weekly:!!data.weekly, status:'scheduled'};
         record('reminder','scheduled',r.title,state.paused,{ reminders:[...reminders,r] }); return {id:r.id};
       }
       case 'mcp.time': {
@@ -292,10 +297,11 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
   };
 }
 
-function nextDay(previous, current) {
+function nextOccurrence(previous, current, weekly) {
   const next = new Date(current);
   const original = new Date(previous);
   next.setHours(original.getHours(),original.getMinutes(),original.getSeconds(),0);
-  if (next.getTime() <= current) next.setDate(next.getDate()+1);
+  if (weekly) next.setDate(next.getDate()+(original.getDay()-next.getDay()+7)%7);
+  if (next.getTime() <= current) next.setDate(next.getDate()+(weekly?7:1));
   return next.getTime();
 }
