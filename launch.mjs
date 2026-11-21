@@ -11,7 +11,8 @@ const userConfig=join(env.LOCALAPPDATA ?? root, 'AbyssiniaAI', '.env');
 if(existsSync(userConfig))process.loadEnvFile(userConfig);
 const port = Number(env.ASSISTANT_PORT ?? 8789);
 const url = 'http://127.0.0.1:' + port;
-const home = join(env.LOCALAPPDATA ?? '', 'hermes');
+const productEngine=join(env.LOCALAPPDATA ?? '', 'AbyssiniaAI','hermes-deps');
+const home = existsSync(join(productEngine,'hermes-agent','run_agent.py')) ? productEngine : join(env.LOCALAPPDATA ?? '', 'hermes');
 env.ASSISTANT_HERMES_SOURCE ??= join(home, 'hermes-agent');
 if (!env.ASSISTANT_PYTHON) {
   const installs = join(home, 'installs');
@@ -28,7 +29,7 @@ if (!env.ASSISTANT_PYTHON) {
   if (latest) env.ASSISTANT_PYTHON = latest.exe;
 }
 if (!existsSync(env.ASSISTANT_PYTHON ?? '') || !existsSync(join(env.ASSISTANT_HERMES_SOURCE,'run_agent.py'))) {
-  throw Error('Set ASSISTANT_PYTHON and ASSISTANT_HERMES_SOURCE in .env to your installed Hermes environment.');
+  throw Error('Run Setup Abyssinia Engine.cmd from the Windows package, or configure ASSISTANT_PYTHON and ASSISTANT_HERMES_SOURCE in .env.');
 }
 env.ASSISTANT_MODEL_URL ??= 'http://127.0.0.1:20128/v1';
 env.ASSISTANT_MODEL_ID ??= 'kc/openrouter/free';

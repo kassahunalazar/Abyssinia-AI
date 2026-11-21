@@ -41,6 +41,35 @@ test('redacts provider failure', async t => {
   assert.deepEqual(await response.json(), { error: 'provider_failed' });
 });
 
+test('unread attachments fail closed without streaming an answer or advancing the conversation', async t => {
+  const { origin, cookie } = await start(t, async (message, history, provider, attachment, onRead, signal, onDelta) => {
+    if (attachment) {
+      onDelta?.('unverified draft');
+      return 'unverified answer';
+    }
+    return history.map(entry => entry.content).join('|') || 'initial answer';
+  });
+  const post = (body, accept = 'application/json') => fetch(origin + '/api/chat', {
+    method: 'POST', headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json', Accept: accept },
+    body: JSON.stringify(body),
+  });
+  const initial = await (await post({ message: 'initial', conversation: null })).json();
+  const attachment = { name: 'fixture.txt', text: 'synthetic file contents' };
+  const draft = { message: 'read fixture', conversation: initial.conversation, attachment };
+  const regular = await post(draft);
+  assert.equal(regular.status, 422);
+  assert.deepEqual(await regular.json(), { error: 'attachment_unread' });
+
+  const streamed = await post(draft, 'application/x-ndjson');
+  assert.match(streamed.headers.get('content-type'), /^application\/x-ndjson\b/);
+  assert.deepEqual((await streamed.text()).trimEnd().split('\n').map(line => JSON.parse(line)), [
+    { state: 'thinking' }, { status: 422, error: 'attachment_unread' },
+  ]);
+
+  const after = await (await post({ message: 'follow-up', conversation: initial.conversation })).json();
+  assert.equal(after.reply, 'initial|initial answer');
+});
+
 test('keeps completed turns isolated and bounded across chat switches and failed retries', async t => {
   const { origin, cookie } = await start(t, async (message, history) => {
     if (message === 'fail') throw Error();

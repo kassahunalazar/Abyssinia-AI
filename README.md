@@ -34,3 +34,7 @@ In Connections, add a local MCP HTTP endpoint to inspect its advertised tools. T
 The voice evaluation panel records short samples, transcribes them with an installed local model and lets you correct the text before adding it to chat. Speech playback requires a configured speech provider and a qualifying native-listener review. Local model weights and personal credentials are outside the package.
 
 The optional Hohe speech model is distributed separately under CC BY 4.0. Original Amharic model by Chapi and Dataset.ET, based on Ethio-ASR; INT8 ONNX conversion by Yaredoffice. [Original model](https://huggingface.co/snapwre/hohe-asr-amharic) · [Quantized weights](https://huggingface.co/Yaredoffice/hohe-asr-amharic-onnx-int8) · [License](https://creativecommons.org/licenses/by/4.0/)
+
+On a new Windows account, the ZIP includes **Setup Abyssinia Engine.cmd**. It runs the verified upstream installer for the exact tested Hermes v0.23.0 commit under your LocalAppData and updates your user PATH. Run it once if the engine is missing. **Open Abyssinia AI.cmd** then opens the product. To install the optional local speech benchmark weights, run `scripts/setup-speech-model.ps1`. The Hohe worker requires Python with NumPy and ONNX Runtime. Set `ASSISTANT_STT_PYTHON` to that interpreter.
+
+**ሰነዶቼ** lists documents saved by the application. Search or read a document, then request approval for a rename or deletion. An MCP server advertising `get_current_time` can perform a timezone lookup after approval. Other discovered tools are shown as metadata.

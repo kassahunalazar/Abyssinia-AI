@@ -68,3 +68,19 @@ Implemented a one-click Windows launcher for the existing dependencies, browser 
 - NOT RUN: a real person's screen-picker consent flow, native-speaker speech quality tests, arbitrary desktop actions, broad coding-agent parity or a clean Windows machine installation.
 - LIMITATIONS: screen reading supports the installed Windows OCR languages. Code review reads one selected file per turn. Document writes create new TXT or Markdown files only. Reminders run while the local gateway is up. Speech, general desktop control, repository patch execution and external MCP management remain open.
 - NEXT: verify the screen picker with a user-selected window, then extend workspace grants and reviewed patches for repository editing. Speech selection requires native-speaker evaluation before integration.
+
+## 21 November 2026 release verification
+
+**IMPLEMENTED** Streaming chat, document browsing, approval-bound rename and deletion, one-file code editing and rollback, draft syntax checks, MCP discovery and approved time lookup, Windows focus and scroll controls, and speech benchmark controls.
+
+**TESTED / PASS** On Windows, Node 24.15.0, with the Python environment chosen by the launcher: 32 tests passed, zero failed or skipped in 61.2 seconds. The installed Hermes harness streamed two ordered Amharic deltas, completed a follow-up with the same handle, and executed a scoped attachment read against a deterministic inference endpoint. An Edge test exercised managed document listing, filtering, preview, approved rename, rejected deletion and approved deletion against disposable files. Edge also exercised approved source edit and rollback. A temporary Windows WPF window scrolled after approval. The MCP test server observed exactly one approved time lookup and no calls after rejection, pause or replay.
+
+**FAIL** On the live OmniRoute free route, three app requests streamed Amharic text in 38–53 seconds. The model missed a previous marker and skipped its attachment tool. The gateway now discards answers to attachment requests when the model skips the read. Two other advertised free tool-capable routes returned model_not_found in direct tests. Wrong installed Python environments also produced 180-second timeouts. The launcher selects by environment-directory timestamp.
+
+**BLOCKED** Native-speaker speech approval and a production-grade Amharic inference route. The local Gemini speech adapter has no configured credential; synthesized playback was exercised with a fixture WAV.
+
+**NOT RUN** Fresh-account engine installation and unrestricted repository test execution. The release build verifies the upstream installer hash before offering per-user dependency installation.
+
+**KNOWN LIMITATIONS** Notes and transcripts live in the current browser. A model change and a gateway restart affect live conversation context. Coding grants cover individual source files; arbitrary project command execution and Git worktree automation remain open. Desktop actions cover OCR, focus and scrolling. MCP execution currently covers the standard current-time operation only.
+
+**NEXT STEP** Compare the same context-recall and tool-use probes on a dependable Amharic model and obtain a native-listener speech rating.

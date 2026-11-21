@@ -180,6 +180,7 @@ form.addEventListener('submit', async event => {
         if(changed && active===chat)render();
       }
       if(result?.status===423)throw Error('paused');
+      if(result?.error==='attachment_unread')throw Error('attachment_unread');
       if(result?.status!==200)throw Error('Incomplete stream');
     }else result=await response.json();
     const { reply, conversation, tool } = result;
@@ -191,7 +192,7 @@ form.addEventListener('submit', async event => {
     chat.conversation = conversation;
     saveChats();
   } catch (error) {
-    chat.error = error.message === 'paused' ? 'ሥራው ቆሟል። ለመቀጠል አጋዡን ያስጀምሩ።' : error.message === 'expired'
+    chat.error = error.message === 'attachment_unread' ? 'ሞዴሉ አባሪውን አላነበበም። መሣሪያ መጠቀም የሚችል ሞዴል ይምረጡ።' : error.message === 'paused' ? 'ሥራው ቆሟል። ለመቀጠል አጋዡን ያስጀምሩ።' : error.message === 'expired'
       ? 'ይህን ውይይት መቀጠል አይቻልም። እባክዎ አዲስ ውይይት ይጀምሩ።'
       : 'መልስ ማግኘት አልተቻለም። እባክዎ እንደገና ይሞክሩ።';
     if (active === chat && !input.value) input.value = text;

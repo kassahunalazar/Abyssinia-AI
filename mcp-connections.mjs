@@ -39,7 +39,15 @@ async function rpcResult(response, id) {
   } finally {await reader.cancel().catch(()=>{});}
 }
 
-export async function discoverMcp(endpoint, signal) {
+export function discoverMcp(endpoint, signal) { return sessionRequest(endpoint,signal); }
+
+export function mcpCurrentTime(endpoint, timezone, signal) {
+  if(typeof timezone !== 'string' || timezone.length>80)throw Error('invalid');
+  new Intl.DateTimeFormat('en',{timeZone:timezone});
+  return sessionRequest(endpoint, signal, timezone);
+}
+
+async function sessionRequest(endpoint, signal, timezone) {
   const url=mcpEndpoint(endpoint);
   const headers={'Content-Type':'application/json',Accept:'application/json, text/event-stream'};
   const deadline=AbortSignal.any([signal,AbortSignal.timeout(12000)]);
@@ -70,6 +78,18 @@ export async function discoverMcp(endpoint, signal) {
         }
         cursor=list.nextCursor;
       }while(cursor);
+    }
+    if(timezone!==undefined){
+      if(!tools.includes('get_current_time'))throw Error('unavailable');
+      const reply=await send({id:++id,method:'tools/call',params:{name:'get_current_time',arguments:{timezone}}});
+      if(!reply.ok)throw Error('connection');
+      const result=await rpcResult(reply,id);
+      if(result.isError || !Array.isArray(result.content))throw Error('protocol');
+      const text=result.content.filter(p=>p.type==='text' && typeof p.text==='string').map(p=>p.text).join('\n');
+      if(!text || text.length>4096)throw Error('protocol');
+      const value=JSON.parse(text);
+      if(typeof value.datetime!=='string' || !/^\d{4}-\d\d-\d\dT[0-9:.+Z-]{5,32}$/.test(value.datetime) || !Number.isFinite(Date.parse(value.datetime)))throw Error('protocol');
+      return {datetime:value.datetime,timezone};
     }
     return {tools,capabilities:Object.keys(info.capabilities??{}).slice(0,24)};
   } finally {

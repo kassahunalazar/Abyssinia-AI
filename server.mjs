@@ -177,7 +177,8 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           finally{control.end();}
         }
         if(data?.action==='code.check'){
-          const snapshot=control.execute({action:'code.read'});
+          let snapshot;
+          try{snapshot=control.execute({action:'code.read'});}catch{return json(409,{error:'unavailable'});}
           if(snapshot.grant!==data.grant)return json(409,{error:'unavailable'});
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
@@ -243,10 +244,14 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       if(!testing && req.headers.accept==='application/x-ndjson'){
         res.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8'});
         res.write(JSON.stringify({state:'thinking'})+'\n');
-        onDelta=delta=>{if(!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
+        onDelta=delta=>{if(!attachment&&!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
       }
       const answer = await reply(message, prior?.turns ?? [], provider, attachment, () => { read = true; }, signal,onDelta);
       signal.throwIfAborted();
+      if (attachment && !read) {
+        control.record('attachment.read', 'unused');
+        return json(422, {error:'attachment_unread'});
+      }
       if (read) control.record('attachment.read', 'completed');
       control.record(action, 'completed');
       if (testing) return json(200, { ok: true, model: provider.model });

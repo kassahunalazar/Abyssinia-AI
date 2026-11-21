@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { snapshotFile, replaceReviewed } from './code-workspace.mjs';
-import { mcpEndpoint } from './mcp-connections.mjs';
+import { mcpCurrentTime, mcpEndpoint } from './mcp-connections.mjs';
 import { windowAction } from './desktop-control.mjs';
 
 export function workspaceControl(directory, now = Date.now, desktop = windowAction) {
@@ -13,6 +13,12 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
   let state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : { paused: false, events: [] };
   const pending = new Map();
   let grant;
+  function documentPath(name) {
+    if(typeof name!=='string'||!/^([\p{L}\p{M}\p{N} _-]{1,80})\.(txt|md)$/iu.test(name)||
+       /^(CON|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³]) *\./i.test(name))throw Error('invalid');
+    if(realpathSync(directory)!==directory || realpathSync(workspace)!==workspace)throw Error('invalid');
+    return join(workspace,name);
+  }
   function revokeEdits() {
     for (const [id,item] of pending) if (item.tool === 'code.replace') {
       pending.delete(id); record(item.tool,'cancelled',item.target);
@@ -22,6 +28,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
   let active;
   let desktopEnabled=false;
   let desktopBusy=false;
+  let runningConnection;
   const windows=new Map();
   function revokeDesktop() {
     desktopEnabled=false;windows.clear();
@@ -94,6 +101,26 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       switch (data.action) {
       case 'heartbeat':
         return { paused: state.paused, notice: state.events.findLast(e=>e.action==='reminder' && e.result==='delivered') };
+      case 'document.list':
+        if(!existsSync(workspace) || state.paused)return {names:[]};
+        if(realpathSync(workspace)!==workspace)throw Error('invalid');
+        return {names:readdirSync(workspace,{withFileTypes:true}).filter(entry=>{
+          try{return entry.isFile() && lstatSync(documentPath(entry.name)).nlink===1;}catch{return false;}
+        }).map(entry=>entry.name).sort()};
+      case 'document.read':
+      case 'document.propose': {
+        if(state.paused)throw Error('unavailable');
+        const target=documentPath(data.name);
+        const snapshot=snapshotFile(target);
+        if(data.action==='document.read')return {text:snapshot.text};
+        if(pending.size>=16 || !['rename','delete'].includes(data.operation))throw Error('invalid');
+        const destination=data.operation==='rename'?documentPath(data.destination):undefined;
+        if(destination && existsSync(destination))throw Error('invalid');
+        const item={id:randomUUID(),agent:'Abyssinia AI',tool:'document.'+data.operation,risk:data.operation,target,
+          destination,fileId:snapshot.fileId,before:snapshot.text,text:(destination?destination+'\n\n':'')+snapshot.text,expires:now()+120000};
+        pending.set(item.id,item);record(item.tool,'requested',target);return {id:item.id};
+      }
+
       case 'status':
         return { paused: state.paused, running: Boolean(active), workspace,
           codeTarget:grant?.path, canUndo:Boolean(grant?.undo),
@@ -133,6 +160,14 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         const r = {id:randomUUID(), title:data.title.trim(), next:data.next, daily:data.daily, status:'scheduled'};
         record('reminder','scheduled',r.title,state.paused,{ reminders:[...reminders,r] }); return {id:r.id};
       }
+      case 'mcp.time': {
+        const c=this.connection(data.id);
+        if(!c.tools.includes('get_current_time') || pending.size>=16 || typeof data.timezone!=='string' || data.timezone.length>80)throw Error('invalid');
+        new Intl.DateTimeFormat('en',{timeZone:data.timezone});
+        const item={id:randomUUID(),connection:c.id,timezone:data.timezone,agent:'Abyssinia AI',tool:'mcp.get_current_time',
+          target:c.url,text:JSON.stringify({timezone:data.timezone}),risk:'read time',expires:now()+120000};
+        pending.set(item.id,item);record(item.tool,'requested',c.url);return {id:item.id};
+      }
       case 'mcp.add': {
         const list=state.connections??[];
         const url=mcpEndpoint(data.url);
@@ -144,6 +179,8 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       case 'mcp.remove': {
         const list=state.connections??[], c=list.find(x=>x.id===data.id);
         if(!c)throw Error('invalid');
+        if(runningConnection===c.id)active?.abort();
+        for(const [id,item] of pending)if(item.connection===c.id){pending.delete(id);record(item.tool,'cancelled',c.url);}
         const connections=data.action==='mcp.remove'?list.filter(x=>x!==c):list.map(x=>x===c?{...x,enabled:!x.enabled}:x);
         record(data.action,'completed',c.name,state.paused,{connections});return {};
       }
@@ -198,10 +235,30 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       case 'approve': {
         const item = pending.get(data.id);
         if (!item || state.paused) throw Error('expired');
-        if(data.action==='approve'&&item.tool.startsWith('window.')&&active)throw Error('unavailable');
+        if(data.action==='approve'&&(item.tool.startsWith('window.')||item.tool==='mcp.get_current_time')&&active)throw Error('unavailable');
         pending.delete(data.id);
         if (data.action === 'reject') { record(item.tool, 'rejected', item.target); return {}; }
         record(item.tool, 'approved', item.target);
+        if(item.tool.startsWith('document.')){
+          try{
+            if(snapshotFile(item.target,item.fileId).text!==item.before)throw Error('stale');
+            if(item.destination){
+              linkSync(item.target,item.destination);
+              try{unlinkSync(item.target);}catch(error){unlinkSync(item.destination);throw error;}
+            }else unlinkSync(item.target);
+            record(item.tool,'completed',item.target);
+            return {};
+          }catch(error){record(item.tool,'failed',item.target);throw error;}
+        }
+        if(item.tool==='mcp.get_current_time'){
+          const c=this.connection(item.connection);
+          const signal=this.begin();
+          if(!signal)throw Error('unavailable');
+          runningConnection=c.id;
+          return mcpCurrentTime(c.url,item.timezone,signal).then(result=>{
+            signal.throwIfAborted();record(item.tool,'completed',c.url);return result;
+          }).catch(error=>{record(item.tool,'failed',c.url);throw error;}).finally(()=>{runningConnection=undefined;this.end();});
+        }
         if(item.tool.startsWith('window.')){
           if(!desktopEnabled)throw Error('expired');
           const signal=this.begin();desktopBusy=true;

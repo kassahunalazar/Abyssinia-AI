@@ -21,12 +21,35 @@ async function action(action, params = {}) {
   return r.json();
 }
 function message(text) { $('work-message').textContent = text; }
+let documents=[];
+function filterDocuments(){
+  const q=$('doc-search').value.normalize().toLocaleLowerCase();
+  const selected=$('doc-files').value;
+  const matches=documents.filter(name=>name.normalize().toLocaleLowerCase().includes(q));
+  $('doc-files').replaceChildren(...matches.map(name=>new Option(name,name)));
+  if(matches.includes(selected))$('doc-files').value=selected;
+  $('doc-preview').textContent='';
+}
+async function listDocuments(){
+  if(!$('document-browser').open)return;
+  try{documents=(await action('document.list')).names;filterDocuments();}catch(e){message(e.message)}
+}
+$('document-browser').ontoggle=listDocuments;
+$('doc-search').oninput=filterDocuments;
+$('doc-files').onchange=()=>{$('doc-preview').textContent='';};
+$('doc-read').onclick=async()=>{try{$('doc-preview').textContent=(await action('document.read',{name:$('doc-files').value})).text;}catch(e){message(e.message);}};
+for(const operation of ['rename','delete']){
+  $('doc-'+operation).onclick=async()=>{
+    try{await action('document.propose',{operation,name:$('doc-files').value,destination:$('doc-name').value});await refresh();$('approval-list').scrollIntoView();}
+    catch(e){message(e.message);}
+  };
+}
 async function decide(id, decision) {
-  try { await action(decision,{id}); message(decision === 'approve' ? 'ፋይሉ ተቀምጧል።' : 'ጥያቄው ውድቅ ሆኗል።');
+  try { const result=await action(decision,{id}); message(result.datetime ? result.timezone+' · '+result.datetime : decision === 'approve' ? 'ጥያቄው ተፈጽሟል።' : 'ጥያቄው ውድቅ ሆኗል።');
     if(decision==='approve'&&codeFile){const s=await action('code.read');if(s.text!==codeFile.text)loadCode(s);}
   }
   catch(e) { message(e.message); }
-  await refresh();
+  await refresh();await listDocuments();
 }
 const labels = { chat:'ውይይት', 'file.create':'ፋይል መፍጠር','provider.test':'አቅራቢ መፈተሽ','attachment.read':'አባሪ ማንበብ',agent:'አጋዥ',
   completed:'ተጠናቋል', requested:'ተጠይቋል', approved:'ተፈቅዷል',rejected:'ውድቅ ሆኗል',created:'ተፈጥሯል',failed:'አልተሳካም',expired:'ጊዜው አልፏል',paused:'ቆሟል',resumed:'ቀጥሏል',cancelled:'ተሰርዟል',interrupted:'ተቋርጧል' };
@@ -48,6 +71,10 @@ async function refresh() {
       line((c.tools??[]).join(', ')));
     if(c.checked)box.append(line(new Date(c.checked).toLocaleString()+' · '+c.capabilities.join(', ')));
     if(c.enabled)box.append(button('መሣሪያዎችን ፈትሽ',()=>mcpAction('mcp.check',c.id)));
+    if(c.enabled && c.tools.includes('get_current_time')){
+      const timezone=document.createElement('input');timezone.value='Africa/Addis_Ababa';timezone.setAttribute('aria-label','Time zone');
+      box.append(timezone,button('ሰዓት ጠይቅ',async()=>{try{await action('mcp.time',{id:c.id,timezone:timezone.value});await refresh();$('approval-list').scrollIntoView();}catch(e){message(e.message);}}));
+    }
     box.append(button(c.enabled?'አሰናክል':'አንቃ',()=>mcpAction('mcp.toggle',c.id)),
       button('አስወግድ',()=>{if(confirm('ግንኙነቱ ይወገድ?'))mcpAction('mcp.remove',c.id)}));
     return box;
