@@ -142,3 +142,5 @@ Edge on Windows verified system dark mode, explicit light and dark selections, p
 **KNOWN LIMITATIONS** — Schedules require the gateway to remain running. Tests support selected synchronous JavaScript modules. General shells, Git worktrees, full browser automation and broad MCP tool execution remain outside the available interfaces.
 
 **NEXT STEP** — Check the packaged build on a clean Windows account and complete the credentialed voice-quality evaluation before promoting to a final release.
+
+The subsequent live checks passed after starting the installed OmniRoute service on 127.0.0.1. The app returned Amharic text and recalled the exact generated marker in the following chat turn. A separately approved live Addis Ababa article returned 1,208 characters and 12 links. The Edge desktop flow applied the approved Amharic value and invoked one native Windows button. Extracting the Windows ZIP into a new temporary folder, launching the packaged Node/gateway against installed Hermes, loading all 39 skills and running a packaged QuickJS assertion also passed.

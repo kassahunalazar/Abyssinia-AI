@@ -1,0 +1,64 @@
+name: Package Windows release
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full commit SHA of an existing Windows preview on main
+        type: string
+        required: true
+permissions:
+  contents: write
+jobs:
+  windows:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select released revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        shell: pwsh
+        run: |
+          if ($env:REVISION -cnotmatch '^[a-f0-9]{40}$') { throw 'Invalid revision' }
+          git merge-base --is-ancestor $env:REVISION HEAD
+          if ($LASTEXITCODE) { throw 'Revision must be on main' }
+          $tag = 'windows-preview-' + $env:REVISION.Substring(0,7)
+          $tagged = git rev-list -n 1 "refs/tags/$tag"
+          if ($tagged -ne $env:REVISION) { throw 'Release tag and revision differ' }
+          git checkout --detach $env:REVISION
+          if ($LASTEXITCODE) { throw 'Checkout failed' }
+          "PACKAGE_TAG=$tag" >> $env:GITHUB_ENV
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.15.0
+          architecture: x64
+      - name: Build and verify package
+        shell: pwsh
+        run: |
+          ./scripts/build-windows.ps1
+          $destination = Join-Path $env:RUNNER_TEMP 'abyssinia-package'
+          Expand-Archive .runtime/Abyssinia-AI-Windows.zip $destination
+          $app = Get-ChildItem $destination -Directory -Filter 'app-*'
+          $node = Join-Path $app.FullName 'node.exe'
+          & $node --check (Join-Path $app.FullName 'server.mjs')
+          if ($LASTEXITCODE) { throw 'Gateway check failed' }
+          if (Test-Path (Join-Path $app.FullName 'scripts/project-test-worker.mjs')) {
+            $fixture = @(@{path='package.test.js';text="import test from 'node:test';test('packaged runner',()=>{});"})
+            $result = (ConvertTo-Json -InputObject $fixture -Compress) | & $node (Join-Path $app.FullName 'scripts/project-test-worker.mjs')
+            if (-not ($result | ConvertFrom-Json).passed) { throw 'Packaged runner test failed' }
+          }
+      - name: Attach Windows package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $existing = gh release view $env:PACKAGE_TAG --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE) { throw 'Release lookup failed' }
+          $complete = $existing.assets | Where-Object { $_.name -eq 'Abyssinia-AI-Windows.zip' -and $_.size -gt 0 }
+          if ($complete) { Write-Output 'Full package already published'; exit 0 }
+          gh release upload $env:PACKAGE_TAG .runtime/Abyssinia-AI-Windows.zip --clobber
+          if ($LASTEXITCODE) { throw 'Release upload failed' }
