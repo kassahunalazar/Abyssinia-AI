@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import test from 'node:test';
@@ -23,10 +26,20 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
     for await (const chunk of req) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks));
     requests.push(body);
-    const needTool = body.tools?.length && !body.messages.some(m => m.role === 'tool');
-    const toolName=body.tools?.[0]?.function?.name;
-    const args=toolName==='propose_reminder'?JSON.stringify({title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true}):toolName==='request_window_action'?'{"operation":"focus"}':
-      toolName==='confirm_tool_call'?'{"code":"READY"}':'{}';
+    const names = (body.tools ?? []).map(tool=>tool.function.name);
+    const results=body.messages.filter(m=>m.role==='tool');
+    let toolName = !results.length && (names.includes('read_attached_text')?'read_attached_text':names[0]);
+    if(names.includes('propose_source_edit') && results.length===1)toolName='propose_source_edit';
+    const needTool = Boolean(toolName);
+    const parameters={
+      propose_reminder:{title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true},
+      request_window_action:{operation:'focus'},
+      confirm_tool_call:{code:'READY'},
+      propose_source_edit:{text:'export const value = 2;\n'},
+      consult_specialist:{specialty:'coding',task:'Analyze this example'},
+      todo_list:{todos:[{id:'one',content:'Review test',status:'pending'}]},
+    };
+    const args=JSON.stringify(parameters[toolName]??{});
     const choice = needTool ? { finish_reason:'tool_calls', message:{ tool_calls:[{
       type:'function', id:'read1', function:{name:toolName,arguments:args},
     }] } } : { finish_reason:'stop', message:{content:'fixture answer'} };
@@ -41,13 +54,16 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
     }
     res.end(JSON.stringify({choices:[choice]}));
   }).listen(0,'127.0.0.1');
-  const app = createAssistant().listen(0,'127.0.0.1');
+  const folder=realpathSync(mkdtempSync(join(tmpdir(),'abyssinia-model-source-')));
+  const source=join(folder,'source.mjs');
+  writeFileSync(source,'export const value = 1;\n');
+  const app = createAssistant({pickFile:async()=>source}).listen(0,'127.0.0.1');
   await Promise.all([once(endpoint,'listening'),once(app,'listening')]);
   t.after(() => { app.close(); endpoint.close(); });
   const origin = 'http://127.0.0.1:' + app.address().port;
   const cookie = await browserCookie(origin);
   const provider = {kind:'custom', url:'http://127.0.0.1:'+endpoint.address().port+'/v1', model:'fixture'};
-  const post = (path, data) => fetch(origin+path,{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const post = (path, data, accept='application/json') => fetch(origin+path,{method:'POST',headers:{Cookie:cookie,Origin:origin,Accept:accept,'Content-Type':'application/json'},body:JSON.stringify(data)});
   assert.equal((await post('/api/provider/test',{provider})).status,200);
   const data = {message:'read it',conversation:null,provider,attachment:{name:'note.txt',text:'fixture marker'}};
   const first = await (await post('/api/chat',data)).json();
@@ -72,4 +88,17 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   assert.equal(status.reminders.length,0);
   assert.equal((await post('/api/provider/test',{provider,mode:'tools'})).status,200);
   assert.deepEqual(requests[7].tools.map(t=>t.function.name),['confirm_tool_call']);
+  const grant=await (await post('/api/control',{action:'code.pick'})).json();
+  const edit=await (await post('/api/chat',{provider,message:'Update my source file',scope:{name:'source',target:grant.grant}})).json();
+  assert.ok(edit.approval, JSON.stringify(edit));
+  assert.equal(readFileSync(source,'utf8'),'export const value = 1;\n');
+  assert.equal((await post('/api/control',{action:'approve',id:edit.approval})).status,200);
+  assert.equal(readFileSync(source,'utf8'),'export const value = 2;\n');
+  const delegated=await (await post('/api/chat',{provider,message:'Ask a coding specialist',scope:{name:'specialist'}})).json();
+  assert.equal(delegated.delegated,'coding');
+  assert.equal(requests.at(-1).tools?.length ?? 0,0);
+  const planned=await post('/api/chat',{provider,message:'Plan a code review',skill:'plan'},'application/x-ndjson');
+  const events=(await planned.text()).trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(events.at(-1).status,200);
+  assert.ok(events.some(event=>event.activity?.name==='todo_list'), JSON.stringify(events));
 });

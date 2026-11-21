@@ -27,5 +27,22 @@ if ($request.action -eq 'focus') {
     if (!$pattern.Current.VerticallyScrollable) { throw 'No vertical scroll.' }
     $direction = if ($request.action -eq 'scrollDown') { [Windows.Automation.ScrollAmount]::LargeIncrement } else { [Windows.Automation.ScrollAmount]::LargeDecrement }
     $pattern.Scroll([Windows.Automation.ScrollAmount]::NoAmount, $direction)
+} elseif ($request.action -in @('controls','invoke','setText')) {
+    Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
+    . (Join-Path $PSScriptRoot 'window-controls.ps1')
+    $rows = @(Get-WindowControls $p.MainWindowHandle $p.Id)
+    if ($request.action -eq 'controls') {
+        $result = @($rows | Select-Object runtime,name,id,class,type,operation)
+        [Console]::Write((ConvertTo-Json -InputObject $result -Compress))
+        exit
+    }
+    $target = $request.parameters.control
+    $match = @($rows | Where-Object {
+        $_.runtime -ceq $target.runtime -and $_.id -ceq $target.id -and $_.name -ceq $target.name -and
+        $_.class -ceq $target.class -and $_.type -ceq $target.type -and $_.operation -ceq $request.action
+    })
+    if($match.Count -ne 1){throw 'Control changed.'}
+    if($request.action -eq 'invoke'){$match[0].pattern.Invoke()}
+    else{$match[0].pattern.SetValue([string]$request.parameters.text)}
 } else { throw 'Unsupported action.' }
 [Console]::Write('{"ok":true}')

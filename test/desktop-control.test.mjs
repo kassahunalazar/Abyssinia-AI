@@ -61,3 +61,32 @@ test('disable and pause revoke desktop selections and approvals', async () => {
   assert.throws(() => execute('approve', pending), /expired/);
   assert.deepEqual(calls.map(call => call.operation), ['list', 'list', 'scrollDown']);
 });
+
+test('desktop text approval binds the control, exact Amharic value and one window', async () => {
+  const editable={runtime:'42,1',name:'Fixture field',id:'text',class:'Edit',type:'ControlType.Edit',operation:'setText'};
+  const called=[];
+  const root=mkdtempSync(join(tmpdir(),'abyssinia-desktop-control-'));
+  const control=workspaceControl(root,Date.now,async(operation,window,signal,parameters)=>{
+    called.push({operation,window,parameters});
+    if(operation==='list')return [panel,other];
+    if(operation==='controls')return [editable];
+    return {ok:true};
+  });
+  const execute=(action,data)=>control.execute({action,...data});
+  execute('desktop.enable');
+  const {windows}=await execute('desktop.list');
+  const [window,another]=windows.map(item=>item.id);
+  const selection=(await execute('desktop.controls',{window})).controls[0];
+  assert.deepEqual(Object.keys(selection).sort(),['id','name','operation']);
+  const request={control:selection.id,window,operation:'setText',text:'ሰላም'};
+  assert.throws(()=>execute('desktop.propose',{...request,window:another}),/expired/);
+  assert.throws(()=>execute('desktop.propose',{...request,operation:'invoke'}),/expired/);
+  const stale=execute('desktop.propose',request);
+  await execute('desktop.controls',{window});
+  assert.throws(()=>execute('approve',stale),/expired/);
+  const current=(await execute('desktop.controls',{window})).controls[0];
+  const {id}=execute('desktop.propose',{...request,control:current.id});
+  await execute('approve',{id,text:'changed',window:another,control:selection.id});
+  assert.deepEqual(called.at(-1),{operation:'setText',window:panel,parameters:{control:editable,text:'ሰላም'}});
+  assert.throws(()=>execute('approve',{id}),/expired/);
+});

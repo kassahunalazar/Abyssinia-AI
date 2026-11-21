@@ -55,3 +55,11 @@ Use the two controls on the composer. **ተናገር** or Ctrl+B records dictati
 Open **ችሎታዎች** for model providers, bundled skills, MCP connectors, available chat tools and Windows controls. Select a skill or tool and add your instruction in the composer. Choose a window or connector before asking Hermes for an action against it. Focus, scroll and MCP clock lookup require their own approval. Use the chat and tool tests in Settings to check a provider separately for each capability.
 
 Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, showing the last result and the next run. Keep the local gateway running for scheduled work. The bundled Amharic interface font is Noto Sans Ethiopic, with its SIL Open Font License included under web/fonts.
+
+## Windows computer use and Hermes coding
+
+Open Capabilities → Computer use. Enable control, list windows, select a window and scan for buttons or editable fields. Select a discovered control and request the exact action. Review the approval to click a button or replace text with the value shown. You can also select the control for chat and describe the action in Amharic. Windows UI Automation determines available controls. Passwords, disabled controls and read-only inputs are excluded. Rescanning invalidates old control selections.
+
+Open AK Code Engine and select one source file. Describe the change in Amharic or English and ask Hermes to prepare it. Hermes calls the scoped read and edit proposal tools. The approval inbox shows the diff and complete content before writing. You can check JavaScript or Python syntax and request rollback. The Windows host needs an isolated execution backend before the product can run arbitrary project commands.
+
+For a second Hermes opinion, select the specialist tool in Capabilities and describe the analysis. One separate Hermes turn receives the bounded task. It has no file or tool permissions. The planning skill can use the installed Hermes todo_list tool, with tool activity visible while it runs.

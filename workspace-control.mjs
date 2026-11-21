@@ -30,8 +30,9 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
   let desktopBusy=false;
   let runningConnection;
   const windows=new Map();
+  const controls=new Map();
   function revokeDesktop() {
-    desktopEnabled=false;windows.clear();
+    desktopEnabled=false;windows.clear();controls.clear();
     if(desktopBusy)active?.abort();
     for(const [id,item] of pending)if(item.tool.startsWith('window.')){
       pending.delete(id);record(item.tool,'cancelled',item.target);
@@ -155,16 +156,37 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         if(!desktopEnabled||state.paused||active)throw Error('unavailable');
         const signal=this.begin();desktopBusy=true;
         return desktop('list',null,signal).then(rows=>{
-          signal.throwIfAborted();windows.clear();
+          signal.throwIfAborted();windows.clear();controls.clear();
           const result=rows.map(w=>{const id=randomUUID();windows.set(id,w);return {id,title:w.title,process:w.process};});
           return {windows:result};
         }).finally(()=>{desktopBusy=false;this.end()});
       }
+      case 'desktop.controls': {
+        if(!desktopEnabled||state.paused||active)throw Error('unavailable');
+        const window=windows.get(data.window);
+        if(!window)throw Error('expired');
+        const signal=this.begin();desktopBusy=true;controls.clear();
+        return desktop('controls',window,signal).then(rows=>{
+          signal.throwIfAborted();
+          return {controls:rows.map(row=>{
+            const id=randomUUID();
+            controls.set(id,{window,recipe:row,expires:now()+180000});
+            return {id,name:row.name||row.id||row.type,operation:row.operation};
+          })};
+        }).finally(()=>{desktopBusy=false;this.end();});
+      }
       case 'desktop.propose': {
-        if(!desktopEnabled||state.paused||pending.size>=16||!['focus','scrollUp','scrollDown'].includes(data.operation))throw Error('invalid');
+        if(!desktopEnabled||state.paused||pending.size>=16||!['focus','scrollUp','scrollDown','invoke','setText'].includes(data.operation))throw Error('invalid');
         const window=windows.get(data.window);if(!window)throw Error('expired');
-        const item={id:randomUUID(),window,operation:data.operation,agent:'Abyssinia AI',tool:'window.'+data.operation,
-          target:window.process+' · '+window.title+' · PID '+window.pid,text:data.operation,risk:'desktop control',expires:now()+120000};
+        const element=['invoke','setText'].includes(data.operation)?controls.get(data.control):null;
+        if(['invoke','setText'].includes(data.operation) &&
+           (element?.window!==window || element.expires<=now() || element.recipe.operation!==data.operation))throw Error('expired');
+        if(data.operation==='setText'&&(typeof data.text!=='string'||Buffer.byteLength(data.text)>4096||data.text.includes('\0')))throw Error('invalid');
+        const elementName=element?.recipe.name||element?.recipe.id||element?.recipe.type;
+        const item={id:randomUUID(),window,operation:data.operation,controlGrant:data.control,
+          parameters:element?{control:element.recipe,text:data.operation==='setText'?data.text:undefined}:undefined,
+          agent:'Abyssinia AI',tool:'window.'+data.operation,
+          target:window.process+' · '+window.title+' · PID '+window.pid,text:element?(elementName+(data.operation==='setText'?'\n\n'+data.text:'')):data.operation,risk:'desktop control',expires:now()+120000};
         pending.set(item.id,item);record(item.tool,'requested',item.target);return {id:item.id};
       }
       case 'schedule': {
@@ -280,9 +302,9 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
           }).catch(error=>{record(item.tool,'failed',c.url);throw error;}).finally(()=>{runningConnection=undefined;this.end();});
         }
         if(item.tool.startsWith('window.')){
-          if(!desktopEnabled)throw Error('expired');
+          if(!desktopEnabled || (item.parameters && (!controls.has(item.controlGrant)||controls.get(item.controlGrant).expires<=now())))throw Error('expired');
           const signal=this.begin();desktopBusy=true;
-          return desktop(item.operation,item.window,signal).then(()=>{
+          return desktop(item.operation,item.window,signal,item.parameters).then(()=>{
             signal.throwIfAborted();record(item.tool,'completed',item.target);return {};
           }).catch(error=>{record(item.tool,'failed',item.target);throw error})
             .finally(()=>{desktopBusy=false;this.end()});

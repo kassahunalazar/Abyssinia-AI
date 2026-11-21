@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { resolveProvider } from './providers.mjs';
 import { workspaceControl } from './workspace-control.mjs';
 import { referenceSearch } from './reference-search.mjs';
@@ -77,6 +77,7 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
         try{
           const item=JSON.parse(line);
           if(typeof item.delta==='string')onDelta?.(item.delta);
+          else if(item.activity)extension?.onActivity?.(item.activity);
           else final=item;
         }catch{child.kill();reject(Error('Invalid worker event'));return}
       }
@@ -96,7 +97,7 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
         reject(error);
       }
     });
-    child.stdin.end(JSON.stringify({ message, history, attachment,capability:extension?.capability,skill:extension?.skill,stream:!!onDelta,schedule:onSchedule?{now:new Date().toISOString(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone}:undefined }));
+    child.stdin.end(JSON.stringify({ message, history, attachment,capability:extension?.capability,skill:extension?.skill,nativeToolset:extension?.nativeToolset,progress:!!extension?.onActivity,stream:!!onDelta,schedule:onSchedule?{now:new Date().toISOString(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone}:undefined }));
   });
 }
 
@@ -148,7 +149,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     }
     let message;
     let conversation;
-    let scoped, skill, target, testingTools;
+    let scoped, skill, target, controlId, codeSnapshot, testingTools, nativeToolset;
     let provider;
     let attachment;
     try {
@@ -251,12 +252,22 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       if(!testing && data?.skill!==undefined){
         if(typeof data.skill!=='string' || !Object.hasOwn(skills,data.skill))return json(400,{error:'skill'});
         skill=skills[data.skill].guidance;
+        nativeToolset=skills[data.skill].native;
       }
       if(!testing && data?.scope!==undefined){
         const name=data.scope?.name;
         if(attachment || typeof name!=='string' || !Object.hasOwn(capabilities,name))return json(400,{error:'scope'});
         scoped=name;target=data.scope.target;
-        if(name!=='research' && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
+        if(!['research','specialist'].includes(name) && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
+        if(name==='desktopControl'){
+          controlId=data.scope.control;
+          if(typeof controlId!=='string'||controlId.length>64)return json(400,{error:'scope'});
+        }
+        if(name==='source'){
+          try{codeSnapshot=control.execute({action:'code.read'});}catch{return json(409,{error:'scope_unavailable'});}
+          if(codeSnapshot.grant!==target || Buffer.byteLength(codeSnapshot.text)>16384)return json(409,{error:'scope_unavailable'});
+          attachment={name:basename(codeSnapshot.target),text:codeSnapshot.text};
+        }
       }
       if (attachment !== undefined && (typeof attachment?.text !== 'string' ||
           Buffer.byteLength(attachment.text) > 16384 || typeof attachment.name !== 'string' ||
@@ -280,35 +291,54 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       const route = JSON.stringify([provider?.base, provider?.model]);
       if (prior && prior.route !== route) return json(409, { error: 'provider_changed' });
       let read = false;
-      let onDelta;
+      let onDelta, onActivity;
       if(!testing && req.headers.accept==='application/x-ndjson'){
         res.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8'});
         res.write(JSON.stringify({state:'thinking'})+'\n');
+        onActivity=activity=>{if(!res.destroyed&&!signal.aborted)res.write(JSON.stringify({activity})+'\n');};
         onDelta=delta=>{if(!attachment&&!res.destroyed&&!signal.aborted)res.write(JSON.stringify({delta})+'\n');};
       }
       const scheduling=!testing&&!scoped&&!attachment&&(wantsReminder(message)||(prior?.awaitingTime&&/ደቂቃ|ሰዓት|ነገ|ጠዋት|ማታ|\b(?:tomorrow|minutes?|hours?|am|pm|noon)\b|\d:\d/iu.test(message)));
       let draft=scheduling?relativeReminder(message,Date.now()):undefined;
-      let answer, proposal, sources, approval;
+      let answer, proposal, sources, approval, delegated;
       if(!testing&&!scoped&&!attachment&&listsReminders(message)){
         const active=control.execute({action:'status'}).reminders.filter(r=>r.status!=='delivered').sort((a,b)=>a.next-b.next);
         answer=active.length?active.map(r=>r.title+' · '+new Date(r.next).toLocaleString('am-ET')+(r.weekly?' · በየሳምንቱ':r.daily?' · በየቀኑ':'')+(r.status==='held'?' · ለአፍታ ቆሟል':'')).join('\n'):'የተመዘገበ ማስታወሻ የለም።';
       }else if(!draft){
         answer=await reply(message,prior?.turns??[],provider,attachment,()=>{read=true;},signal,scheduling||scoped?undefined:onDelta,
           scheduling?candidate=>{draft=validateDraft(candidate,Date.now());}:undefined,
-          {skill,capability:testingTools?providerProbe:scoped?capabilities[scoped]:undefined,onAction:args=>{proposal=args;}});
+          {skill,nativeToolset,onActivity,capability:testingTools?providerProbe:scoped?capabilities[scoped]:undefined,onAction:args=>{proposal=args;}});
       }
       if(scoped){
         signal.throwIfAborted();
         if(!proposal){
           answer='መሣሪያው ጥቅም ላይ አልዋለም። መሣሪያ ጥሪን የሚደግፍ ሞዴል ይምረጡ።';
+        }else if(scoped==='specialist'){
+          if(!['research','coding','planning'].includes(proposal.specialty)||typeof proposal.task!=='string'||!proposal.task.trim()||proposal.task.length>1600)
+            return json(422,{error:'scope_unavailable'});
+          answer=await reply(proposal.task,[],provider,undefined,undefined,signal,undefined,undefined,
+            {skill:'You are a read-only '+proposal.specialty+' specialist. Give advice and analysis. You have no workspace, web, or action access.'});
+          signal.throwIfAborted();
+          delegated=proposal.specialty;
+          control.record('hermes.specialist','completed',delegated);
         }else if(scoped==='research'){
           sources=await referenceSearch(proposal.query,proposal.language,signal);
           control.record('research','completed');
           answer=sources.length?'የተገኙ ምንጮች።':'ምንጭ አልተገኘም።';
         }else{
           try{
-            approval=scoped==='desktop'?control.execute({action:'desktop.propose',window:target,operation:proposal.operation}):
-              control.execute({action:'mcp.time',id:target,timezone:proposal.timezone});
+            if(scoped==='source'){
+              if(!read || typeof proposal.text!=='string')return json(422,{error:'attachment_unread'});
+              let text=proposal.text;
+              if(!codeSnapshot.text.replaceAll('\r\n','').includes('\n') && codeSnapshot.text.includes('\r\n'))
+                text=text.replace(/\r?\n/g,'\r\n');
+              if(codeSnapshot.text.startsWith('\ufeff')&&!text.startsWith('\ufeff'))text='\ufeff'+text;
+              approval=control.execute({action:'code.propose',grant:target,before:codeSnapshot.text,text});
+            }else if(scoped==='desktop'||scoped==='desktopControl'){
+              const allowed=scoped==='desktop'?['focus','scrollUp','scrollDown']:['invoke','setText'];
+              if(!allowed.includes(proposal.operation))return json(422,{error:'scope_unavailable'});
+              approval=control.execute({action:'desktop.propose',window:target,operation:proposal.operation,control:controlId,text:proposal.text});
+            }else approval=control.execute({action:'mcp.time',id:target,timezone:proposal.timezone});
           }catch{return json(409,{error:'scope_unavailable'});}
           answer='እርምጃውን እንዲፈጽም በፈቃድ ጥያቄዎች ውስጥ ይገምግሙ።';
         }
@@ -327,7 +357,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       control.record(action, 'completed');
       if (testingTools && proposal?.code!=='READY') return json(422,{error:'tool_not_used'});
       if (testing) return json(200, { ok: true, model: provider.model });
-      const metadata={...(draft&&{reminder:draft}),...(sources&&{sources}),...(approval&&{approval:approval.id})};
+      const metadata={...(draft&&{reminder:draft}),...(sources&&{sources}),...(delegated&&{delegated}),...(approval&&{approval:approval.id})};
       if (conversation === undefined) return json(200, { reply: answer,...metadata });
       const id = conversation ?? randomUUID();
       const turns = [...(prior?.turns ?? []), { role: 'user', content: message }, { role: 'assistant', content: answer }];

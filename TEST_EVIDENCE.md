@@ -110,3 +110,17 @@ Edge on Windows verified system dark mode, explicit light and dark selections, p
 **NOT RUN** Live broad browser navigation, desktop text entry and arbitrary connector execution.
 **KNOWN LIMITATIONS** Bundled skills guide a turn. Windows actions cover selected-window focus, page scrolling and user-selected OCR. Connector execution covers approved MCP clock lookup. Narration begins after the reply is complete. Scheduled jobs cover public reference lookup.
 **NEXT STEP** Validate the default live provider with Amharic tool calls and test Gemini narration with a reviewed voice.
+
+## Hermes coding and Windows controls
+
+**IMPLEMENTED** Selected-window UI Automation scanning, button invocation, replacement text entry, Hermes source read and edit proposal, a second scoped Hermes agent, and native planning tool activity.
+
+**TESTED / PASS** Windows serial suite passed all 38 tests with zero skips in 196.9 seconds. The installed Hermes harness exercised a source read, code proposal and approved edit, specialist delegation with no inherited tools, and streaming native todo tool activity on a deterministic inference fixture. A real Windows WPF fixture verified that the selected control received Amharic text and the button invoked once, while password, read-only and disabled controls were excluded. The end-to-end Edge run used the public UI through the approval inbox and observed the same native effects. The first browser run timed out waiting for the second approval to disappear; a retry completed both actions. Refresh now preserves unchanged approval controls.
+
+**FAIL / BLOCKED** A dedicated Windows execution sandbox for arbitrary repository builds and tests was unavailable on this host. Native Windows click and text entry depend on UI Automation support in the target program.
+
+**NOT RUN** Live OmniRoute model performance for new tool workflows and live Gemini narration.
+
+**KNOWN LIMITATIONS** Agent editing targets one explicitly selected source file per request. Specialist delegation provides separate reasoning with a scoped text task. Computer use performs approved actions in one selected window. Generic browser navigation, Git worktrees and arbitrary extension execution remain unavailable.
+
+**NEXT STEP** Expand repository-granted editing and isolated test execution.

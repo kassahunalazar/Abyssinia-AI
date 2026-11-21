@@ -29,6 +29,8 @@ field('capabilities-open').onclick=async()=>{
   field('cap-skills').replaceChildren(...Object.entries(skills).map(([skill,item])=>
     button(item.label,()=>choose({...selection,skill}))));
   field('cap-tools').replaceChildren(
+    button(tools.source.label,()=>openWorkspace(null,'code-pick')),
+    button(tools.specialist.label,()=>choose({...selection,scope:{name:'specialist'}})),
     button(tools.research.label,()=>choose({...selection,scope:{name:'research'}})),
     button('ጽሑፍ አያይዝ',()=>{dialog.close();field('attachment').focus();field('attachment').click()}),
     button('ማስታወሻ ቀጠሮ',()=>{dialog.close();field('work-open').click();field('reminder-title').focus()}));
@@ -63,6 +65,15 @@ field('desktop-chat').onclick=()=>{
   const target=field('desktop-window').value;
   if(!target)return;
   selectCapability({...selection,scope:{name:'desktop',target}});
+  field('work').close();
+  field('message').focus();
+};
+
+field('desktop-control-chat').onclick=()=>{
+  const control=field('desktop-control').value;
+  const target=field('desktop-window').value;
+  if(!control || !target)return;
+  selectCapability({...selection,scope:{name:'desktopControl',target,control}});
   field('work').close();
   field('message').focus();
 };

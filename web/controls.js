@@ -2,6 +2,7 @@ import './voice.js';
 import { currentProvider } from './settings.js';
 const $ = id => document.getElementById(id);
 let stopped = false;
+let displayedApprovals;
 export const paused = () => stopped;
 let editing = null;
 function button(label, handler) {
@@ -62,8 +63,8 @@ async function refresh() {
   $('code-undo').disabled=!s.canUndo;
   $('desktop-enabled').checked=s.desktopEnabled;
   $('desktop-list').disabled=!s.desktopEnabled;
-  if(!s.desktopEnabled)$('desktop-window').replaceChildren();
-  $('desktop-chat').disabled=$('desktop-propose').disabled=!s.desktopEnabled||!$('desktop-window').value;
+  if(!s.desktopEnabled){$('desktop-window').replaceChildren();clearWindowControls();}
+  $('desktop-scan').disabled=$('desktop-chat').disabled=$('desktop-propose').disabled=!s.desktopEnabled||!$('desktop-window').value;
   if(!s.codeTarget){codeFile=null;$('code-edit').hidden=true;}
   $('mcp-list').replaceChildren(...s.connections.map(c=>{
     const box=document.createElement('article');
@@ -96,27 +97,31 @@ async function refresh() {
     box.append(button('ሰርዝ',()=>{if(confirm('ደወሉ ይሰረዝ?')) changeReminder('removeReminder',r.id)}));
     return box;
   }));
-  $('approval-list').replaceChildren(...s.approvals.map(item => {
-    const box = document.createElement('article');
-    const body = document.createElement('pre'); body.textContent = item.text;
-    if(item.tool==='code.replace'){
-      const original=item.before.split(/\r?\n/), next=item.text.split(/\r?\n/);
-      let start=0, end=0;
-      while(start<Math.min(original.length,next.length) && original[start]===next[start])start++;
-      while(end<Math.min(original.length,next.length)-start && original.at(-1-end)===next.at(-1-end))end++;
-      const changes=document.createElement('pre');
-      changes.textContent=['@@ '+(start+1)+' @@',...original.slice(start,original.length-end).map(l=>'- '+l),
-        ...next.slice(start,next.length-end).map(l=>'+ '+l)].join('\n');
-      box.append(line('የተቀየሩ መስመሮች · Diff'),changes);
-      const old=document.createElement('pre');old.textContent=item.before;
-      box.append(line('የአሁኑ ይዘት'),old,line('የታቀደ ይዘት'));
-    }
-    box.append(line(item.agent+' · '+item.tool+' · '+item.risk),line(item.target),
-      line('የፈቃዱ መጨረሻ · '+new Date(item.expires).toLocaleTimeString()),body,
-      button('ፍቀድ',()=>decide(item.id,'approve')),button('ውድቅ አድርግ',()=>decide(item.id,'reject')));
-    return box;
-  }));
-  if (!s.approvals.length) $('approval-list').append(line('የሚጠብቅ ጥያቄ የለም።'));
+  const approvalIds=s.approvals.map(item=>item.id).join('/');
+  if(approvalIds!==displayedApprovals){
+    displayedApprovals=approvalIds;
+    $('approval-list').replaceChildren(...s.approvals.map(item => {
+      const box = document.createElement('article');
+      const body = document.createElement('pre'); body.textContent = item.text;
+      if(item.tool==='code.replace'){
+        const original=item.before.split(/\r?\n/), next=item.text.split(/\r?\n/);
+        let start=0, end=0;
+        while(start<Math.min(original.length,next.length) && original[start]===next[start])start++;
+        while(end<Math.min(original.length,next.length)-start && original.at(-1-end)===next.at(-1-end))end++;
+        const changes=document.createElement('pre');
+        changes.textContent=['@@ '+(start+1)+' @@',...original.slice(start,original.length-end).map(l=>'- '+l),
+          ...next.slice(start,next.length-end).map(l=>'+ '+l)].join('\n');
+        box.append(line('የተቀየሩ መስመሮች · Diff'),changes);
+        const old=document.createElement('pre');old.textContent=item.before;
+        box.append(line('የአሁኑ ይዘት'),old,line('የታቀደ ይዘት'));
+      }
+      box.append(line(item.agent+' · '+item.tool+' · '+item.risk),line(item.target),
+        line('የፈቃዱ መጨረሻ · '+new Date(item.expires).toLocaleTimeString()),body,
+        button('ፍቀድ',()=>decide(item.id,'approve')),button('ውድቅ አድርግ',()=>decide(item.id,'reject')));
+      return box;
+    }));
+    if (!s.approvals.length) $('approval-list').append(line('የሚጠብቅ ጥያቄ የለም።'));
+  }
   $('activity-list').replaceChildren(...s.events.map(e => {
     const li = document.createElement('li'); li.textContent = [new Date(e.time).toLocaleString(),labels[e.action] ?? e.action,labels[e.result] ?? e.result,e.target].filter(Boolean).join(' · '); return li;
   }));
@@ -330,16 +335,12 @@ $('code-generate').onclick=async()=>{
   if(new Blob([file.text]).size>16384){message('ሞዴሉ የሚቀበለው ፋይል እስከ 16 KiB ነው።');return}
   const b=$('code-generate');b.disabled=true;message('ለውጡን በማዘጋጀት ላይ…');
   try{
-    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-Text-Attachment':'1'},
-      body:JSON.stringify({provider:currentProvider(),attachment:{name:file.target.split(/[\\/]/).pop(),text:file.text},
-        message:'Read the attached source with read_attached_text. Apply this requested edit. Return the complete replacement file in one fenced code block. Preserve unrelated code. Request: '+instruction,conversation:null})});
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({provider:currentProvider(),scope:{name:'source',target:file.grant},message:instruction,conversation:null})});
     if(!r.ok)throw Error();
     const result=await r.json();
-    if(result.tool!=='read_attached_text'||file!==codeFile)throw Error();
-    const match=/^\s*`{3}[^\n]*\n([\s\S]*?)\r?\n`{3}\s*$/.exec(result.reply);
-    if(!match)throw Error();
-    $('code-content').value=match[1]+(file.text.endsWith('\n')?'\n':'');
-    message('የታቀደውን ይዘት ይገምግሙ።');
+    if(!result.approval||file!==codeFile)throw Error();
+    message(result.reply);await refresh();$('approval-list').scrollIntoView();
   }catch{message('የተሟላ ለውጥ አልተገኘም። እንደገና ይሞክሩ ወይም በእጅ ያርሙ።')}
   finally{b.disabled=false}
 };
@@ -347,12 +348,52 @@ $('desktop-enabled').onchange=async e=>{
   try{await action(e.target.checked?'desktop.enable':'desktop.disable');}catch(err){message(err.message)}await refresh();
 };
 $('desktop-list').onclick=async()=>{
-  try{const result=await action('desktop.list');
+  try{clearWindowControls();const result=await action('desktop.list');
     $('desktop-window').replaceChildren(...result.windows.map(w=>new Option(w.process+' · '+w.title,w.id)));
-    $('desktop-chat').disabled=$('desktop-propose').disabled=!result.windows.length;
+    $('desktop-scan').disabled=$('desktop-chat').disabled=$('desktop-propose').disabled=!result.windows.length;
   }catch(e){message(e.message)}
 };
 $('desktop-propose').onclick=async()=>{
   try{await action('desktop.propose',{window:$('desktop-window').value,operation:$('desktop-operation').value});await refresh();$('approval-list').scrollIntoView();}
   catch(e){message(e.message)}
+};
+
+function clearWindowControls(){
+  $('desktop-controls').hidden=true;
+  $('desktop-control').replaceChildren();
+  $('desktop-text').value='';
+}
+$('desktop-window').onchange=clearWindowControls;
+$('desktop-scan').onclick=async()=>{
+  const window=$('desktop-window').value;
+  clearWindowControls();
+  try{
+    const result=await action('desktop.controls',{window});
+    if(window!==$('desktop-window').value)return;
+    $('desktop-control').replaceChildren(...result.controls.map(control=>{
+      const type=control.operation==='invoke'?'ጠቅ አድርግ':'ጽሑፍ አስገባ';
+      const option=new Option(type+' · '+control.name,control.id);
+      option.dataset.operation=control.operation;
+      return option;
+    }));
+    $('desktop-controls').hidden=!result.controls.length;
+    if(!result.controls.length)message('በዚህ መስኮት የሚሰራ ቁልፍ ወይም ሳጥን አልተገኘም።');
+    updateControl();
+  }catch(e){message(e.message);}
+};
+function updateControl(){
+  const selection=$('desktop-control').selectedOptions[0];
+  $('desktop-run-control').disabled=$('desktop-control-chat').disabled=!selection;
+  $('desktop-typing').hidden=selection?.dataset.operation!=='setText';
+  $('desktop-text').value='';
+}
+$('desktop-control').onchange=updateControl;
+$('desktop-run-control').onclick=async()=>{
+  try {
+    const selection=$('desktop-control').selectedOptions[0];
+    if(!selection)return;
+    await action('desktop.propose',{window:$('desktop-window').value,control:selection.value,
+      operation:selection.dataset.operation,text:$('desktop-text').value});
+    await refresh();$('approval-list').scrollIntoView();
+  }catch(e){message(e.message);}
 };

@@ -58,7 +58,7 @@ function renderHistory() {
   }));
 }
 
-function makeMessage(role, text, reminder, sources, approval) {
+function makeMessage(role, text, reminder, sources, approval, delegated) {
   const card = document.createElement('article');
   const heading = document.createElement('strong');
   const content = document.createElement('p');
@@ -83,6 +83,7 @@ function makeMessage(role, text, reminder, sources, approval) {
       };
       card.append(review);
     }
+    if(delegated){const note=document.createElement('small');note.textContent='የHermes ባለሙያ ረዳት · '+delegated;card.append(note);}
     if(sources?.length){
       const list=document.createElement('ul');
       for(const source of sources){
@@ -118,8 +119,8 @@ function render() {
   suggestions.hidden = inChat;
   workspace.classList.toggle('in-chat', inChat);
   chatTitle.textContent = inChat ? active.title : '';
-  status.textContent = waiting ? 'መልስ በማዘጋጀት ላይ…' : active.error;
-  messages.replaceChildren(...active.entries.map(({ role, text, reminder, sources, approval }) => makeMessage(role, text, reminder, sources, approval)));
+  status.textContent = waiting ? pending.activity ?? 'መልስ በማዘጋጀት ላይ…' : active.error;
+  messages.replaceChildren(...active.entries.map(({ role, text, reminder, sources, approval, delegated }) => makeMessage(role, text, reminder, sources, approval, delegated)));
   if (waiting) messages.append(makeMessage('user', pending.text));
   if(waiting && pending.partial) {
     const draft=document.createElement('article');draft.className='assistant';
@@ -208,7 +209,10 @@ form.addEventListener('submit', async event => {
         for(let end;(end=buffer.indexOf('\n'))!==-1;){
           const event=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);
           if(typeof event.delta==='string'){pending.partial=(pending.partial??'')+event.delta;changed=true;}
-          else if(event.status)result=event;
+          else if(event.activity){
+            pending.activity=(event.activity.phase==='started'?'መሣሪያ በመጠቀም ላይ · ':'መሣሪያ · ')+event.activity.name;
+            changed=true;
+          }else if(event.status)result=event;
         }
         if(changed && active===chat)render();
       }
@@ -219,7 +223,7 @@ form.addEventListener('submit', async event => {
     const { reply, conversation, tool } = result;
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Empty reply');
     const activity = tool === 'read_attached_text' ? '\n📄 አንብቧል · Read ' + file.name : '';
-    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply, reminder:result.reminder, sources:result.sources, approval:result.approval });
+    chat.entries.push({ role: 'user', text: text + activity }, { role: 'assistant', text: reply, reminder:result.reminder, sources:result.sources, approval:result.approval, delegated:result.delegated });
     if (active === chat && attachmentInput.files[0] === file) attachmentInput.value = '';
     chat.provider = provider;
     chat.conversation = conversation;

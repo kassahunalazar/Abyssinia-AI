@@ -105,23 +105,43 @@ def main():
             guidance += (" Current UTC time: " + timing["now"] + ". Local timezone: " + timing["zone"] +
                          ". Use propose_reminder for an unambiguous one-time, weekly or daily reminder. "
                          "Ask for clarification for ambiguous Ethiopian clock conventions or unsupported recurrence.")
+        use_todo = request.get("nativeToolset") == "todo"
+        if use_todo:
+            toolsets.append("todo")
+            guidance += " When useful, use todo_list to organize work into concrete steps and explain the plan to the user."
+        allowed = set()
+        if attachment is not None:
+            allowed.add("read_attached_text")
+        if timing:
+            allowed.add("propose_reminder")
+        if capability:
+            allowed.add(capability["name"])
+        if use_todo:
+            allowed.add("todo_list")
+
+        def tool_progress(event_type, name, preview, args, **kwargs):
+            if name in allowed and event_type in ("tool.started", "tool.completed", "tool.failed"):
+                phase = "failed" if kwargs.get("is_error") else event_type.partition(".")[2]
+                print(json.dumps({"activity": {"name": name, "phase": phase}}), file=output, flush=True)
+
         agent = AIAgent(
             provider="custom",
             base_url=os.environ["ASSISTANT_MODEL_URL"],
             api_key=os.environ.get("ASSISTANT_MODEL_KEY", "local-model"),
             model=os.environ["ASSISTANT_MODEL_ID"],
             enabled_toolsets=toolsets,
+            tool_progress_callback=tool_progress if request.get("progress") else None,
             skip_context_files=True,
             skip_memory=True,
             skip_background_review=True,
             ephemeral_system_prompt=guidance,
-            max_iterations=2,
+            max_iterations=3 if attachment is not None and capability else 2,
             max_tokens=1500,
             run_budget_seconds=50,
             quiet_mode=True,
         )
         names = [tool["function"]["name"] for tool in agent.tools]
-        if names != (["read_attached_text"] if attachment is not None else ["propose_reminder"] if timing else [capability["name"]] if capability else []):
+        if sorted(names) != sorted(allowed):
             raise RuntimeError(f"Unexpected Hermes tool permissions: {names!r}")
         result = agent.run_conversation(request["message"], conversation_history=request.get("history", []),
                                         stream_callback=stream_text if request.get("stream") else None)

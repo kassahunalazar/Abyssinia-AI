@@ -107,7 +107,7 @@
       <section><h3>ክህሎቶች · Skills</h3><div id="cap-skills"></div></section>
       <section><h3>ግንኙነቶች · Connectors</h3><div id="cap-connections"></div><button id="cap-connectors">የMCP ቅንብሮች</button></section>
       <section><h3>መሣሪያዎች · Tools</h3><div id="cap-tools"></div></section>
-      <section class="cap-wide"><h3>ኮምፒውተር አጠቃቀም · Computer use</h3><div id="cap-desktop-status"></div><button id="cap-desktop">መስኮት ምረጥ</button><button id="cap-observe">የማያ ገጽ ጽሑፍ አንብብ</button></section>
+      <section class="cap-wide"><h3>ኮምፒውተር አጠቃቀም · Computer use</h3><div id="cap-desktop-status"></div><p>መስኮት ይምረጡ፣ ቁልፍ ወይም የጽሑፍ ሳጥን ይለዩ፣ ከዚያ እርምጃውን ይፍቀዱ።</p><button id="cap-desktop">መስኮት ምረጥ</button><button id="cap-observe">የማያ ገጽ ጽሑፍ አንብብ</button></section>
     </div>
   </dialog>
   <dialog id="work" aria-labelledby="work-title">
@@ -123,6 +123,13 @@
       <button id="desktop-list" disabled>መስኮቶችን አሳይ</button>
       <select aria-label="መስኮት" id="desktop-window"></select>
       <select aria-label="እርምጃ" id="desktop-operation"><option value="focus">ወደፊት አምጣ</option><option value="scrollDown">አንድ ገጽ ወደታች</option><option value="scrollUp">አንድ ገጽ ወደላይ</option></select>
+      <button id="desktop-scan" disabled>ቁልፎችንና የጽሑፍ ሳጥኖችን አሳይ</button>
+      <div id="desktop-controls" hidden>
+        <label>ቁልፍ ወይም ሳጥን <select id="desktop-control"></select></label>
+        <label id="desktop-typing" hidden>የሚገባ ጽሑፍ <textarea id="desktop-text" rows="2" maxlength="1000"></textarea></label>
+        <button id="desktop-run-control" disabled>እርምጃውን ለፈቃድ አቅርብ</button>
+        <button id="desktop-control-chat" disabled>ለውይይት ምረጥ</button>
+      </div>
       <button id="desktop-chat" disabled>ይህን መስኮት ለውይይት ምረጥ</button>
       <button id="desktop-propose" disabled>ፈቃድ ጠይቅ</button>
     </details>
@@ -133,7 +140,7 @@
     <form id="research-form"><label>በዊኪፔዲያ ፈልግ<input id="research-query" required maxlength="240"></label>
     <label>የምንጭ ቋንቋ <select id="research-lang"><option value="am">አማርኛ</option><option value="en">English</option></select></label><button>ፈልግ</button></form>
     <div id="sources"></div>
-    <h3>AK Code Engine · የኮድ ክለሳ</h3>
+    <h3 id="coding-heading">AK Code Engine · የኮድ ክለሳ</h3>
     <label>የፕሮጀክት አቃፊ ምረጥ <input type="file" id="project-picker" webkitdirectory multiple></label>
     <output id="project-branch"></output>
     <label>ለክለሳ የሚሆን ፋይል <select id="project-file" disabled></select></label>
@@ -142,7 +149,7 @@
     <section id="code-edit" hidden>
       <p id="code-target"></p>
       <label>የሚፈለገው ለውጥ<input id="code-instruction" maxlength="1000"></label>
-      <button id="code-generate" type="button">ፋይሉን ለሞዴሉ ላክና ለውጥ አዘጋጅ</button>
+      <button id="code-generate" type="button">Hermes ለውጥ አዘጋጅቶ ለፈቃድ ያቅርብ</button>
       <label>የታቀደ ይዘት<textarea id="code-content" rows="8" spellcheck="false"></textarea></label>
       <button id="code-check" type="button">Syntax ፈትሽ · JS / Python</button>
       <button id="code-propose" type="button">ለውጡን ለፈቃድ አቅርብ</button>
