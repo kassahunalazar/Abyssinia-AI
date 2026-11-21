@@ -7,12 +7,15 @@ import { basename, resolve } from 'node:path';
 import { resolveProvider } from './providers.mjs';
 import { workspaceControl } from './workspace-control.mjs';
 import { referenceSearch } from './reference-search.mjs';
+import { wikiArticle } from './browser-reader.mjs';
 import { readScreen } from './screen-reader.mjs';
 import { pickSourceFile, checkDraft } from './code-workspace.mjs';
+import { pickRepository as pickRepositoryFolder } from './repository-workspace.mjs';
 import { discoverMcp } from './mcp-connections.mjs';
 import { speechModels, transcribe } from './speech.mjs';
 import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
 import { askGeminiKey } from './gemini-key.mjs';
+import { nativeSkills } from './native-skills.mjs';
 
 import { wantsReminder, listsReminders, relativeReminder, validateDraft } from './web/reminders.js';
 
@@ -32,6 +35,7 @@ const assets = {
   '/voice.js': ['voice.js','text/javascript; charset=utf-8'],
   '/capability-catalog.js': ['capability-catalog.js','text/javascript; charset=utf-8'],
   '/capabilities.js': ['capabilities.js','text/javascript; charset=utf-8'],
+  '/browser-reader.js': ['browser-reader.js','text/javascript; charset=utf-8'],
   '/fonts/NotoSansEthiopic.ttf': ['fonts/NotoSansEthiopic.ttf','font/ttf'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
@@ -101,11 +105,13 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
   });
 }
 
-export function createAssistant({ reply = hermesReply, stateDirectory = resolve(runtime, 'product'), pickFile = pickSourceFile } = {}) {
-  const control = workspaceControl(stateDirectory);
+export function createAssistant({ reply = hermesReply, stateDirectory = resolve(runtime, 'product'),
+  pickFile = pickSourceFile, pickRepository = pickRepositoryFolder, readArticle } = {}) {
+  const control = workspaceControl(stateDirectory, undefined, undefined, readArticle);
   const session = randomUUID();
   const conversations = new Map();
   let sampleTicket;
+  let skillCatalog;
   let sessionVoiceKey;
   const voiceKey=()=>sessionVoiceKey || process.env.ABYSSINIA_TTS_KEY || process.env.GEMINI_API_KEY;
   const server = createServer({ requestTimeout: 10000, headersTimeout: 5000 }, async (req, res) => {
@@ -149,7 +155,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     }
     let message;
     let conversation;
-    let scoped, skill, target, controlId, codeSnapshot, testingTools, nativeToolset;
+    let scoped, skill, target, controlId, codeSnapshot, projectFiles, testingTools, nativeToolset;
     let provider;
     let attachment;
     try {
@@ -157,6 +163,14 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       if (managing) {
+        if(data?.action==='skills.native'){
+          if(control.paused)return json(423,{error:'paused'});
+          if(skillCatalog)return json(200,{skills:skillCatalog});
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'busy'});
+          try{skillCatalog=await nativeSkills({signal});return json(200,{skills:skillCatalog});}
+          catch{return json(503,{error:'skills_unavailable'});}finally{control.end();}
+        }
         if(data?.action==='voice.output')return json(200,{configured:!!voiceKey(),candidates,voices,speechScript,reviewed:control.reviewedVoice});
         if(data?.action==='voice.connect'){
           const signal=control.begin();
@@ -215,16 +229,19 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
             return json(200,result);
           }catch{return json(400,{error:'unsupported'})}finally{control.end()}
         }
-        if (data?.action==='code.pick') {
+        if (data?.action==='code.pick' || data?.action==='code.pickRepository') {
+          const folder = data.action === 'code.pickRepository';
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
+          res.once('close',()=>{if(!res.writableEnded)control.cancel(signal);});
           try {
-            const path=await pickFile(signal);
+            const path=await (folder ? pickRepository(signal) : pickFile(signal));
             signal.throwIfAborted();
-            return json(200,path?control.grantFile(path):{cancelled:true});
+            return json(200,path?(folder ? control.grantRepository(path) : control.grantFile(path)):{cancelled:true});
           }catch{return json(409,{error:'picker'});}
           finally{control.end();}
         }
+        if(['code.projectSnapshot','code.projectPropose'].includes(data?.action))return json(400,{error:'scope'});
         try { return json(200, await control.execute(data)); }
         catch (error) { return json(409, { error: ['invalid','expired','stale','write_failed'].includes(error.message) ? error.message : 'unavailable' }); }
       }
@@ -250,18 +267,29 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       conversation = testing ? undefined : data?.conversation;
       attachment = testing ? undefined : data?.attachment;
       if(!testing && data?.skill!==undefined){
-        if(typeof data.skill!=='string' || !Object.hasOwn(skills,data.skill))return json(400,{error:'skill'});
-        skill=skills[data.skill].guidance;
-        nativeToolset=skills[data.skill].native;
+        if(typeof data.skill!=='string')return json(400,{error:'skill'});
+        if(Object.hasOwn(skills,data.skill)){
+          skill=skills[data.skill].guidance;
+          nativeToolset=skills[data.skill].native;
+        }else if(skillCatalog?.some(item=>'hermes/'+(item.category??'')+'/'+item.name===data.skill)){
+          nativeToolset=data.skill;
+        }else return json(400,{error:'skill'});
       }
       if(!testing && data?.scope!==undefined){
         const name=data.scope?.name;
         if(attachment || typeof name!=='string' || !Object.hasOwn(capabilities,name))return json(400,{error:'scope'});
         scoped=name;target=data.scope.target;
-        if(!['research','specialist'].includes(name) && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
+        if(name==='browser') {
+          try { target = wikiArticle(target); } catch { return json(400,{error:'scope'}); }
+        } else if(!['research','specialist'].includes(name) && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
         if(name==='desktopControl'){
           controlId=data.scope.control;
           if(typeof controlId!=='string'||controlId.length>64)return json(400,{error:'scope'});
+        }
+        if(name==='project'){
+          try{projectFiles=control.execute({action:'code.projectSnapshot',repository:target,paths:data.scope.paths});}
+          catch{return json(409,{error:'scope_unavailable'});}
+          attachment={name:'project-files.json',text:JSON.stringify(projectFiles.map(({path,text})=>({path,text})))};
         }
         if(name==='source'){
           try{codeSnapshot=control.execute({action:'code.read'});}catch{return json(409,{error:'scope_unavailable'});}
@@ -288,6 +316,11 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     const action = testing ? 'provider.test' : 'chat';
     try {
       const prior = conversations.get(conversation);
+      if(nativeToolset?.startsWith('hermes/')){
+        skill=await nativeSkills({selected:nativeToolset.slice(7),signal});
+        control.record('skill.selected','completed',nativeToolset);
+        nativeToolset=undefined;
+      }
       const route = JSON.stringify([provider?.base, provider?.model]);
       if (prior && prior.route !== route) return json(409, { error: 'provider_changed' });
       let read = false;
@@ -327,13 +360,26 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           answer=sources.length?'የተገኙ ምንጮች።':'ምንጭ አልተገኘም።';
         }else{
           try{
-            if(scoped==='source'){
+            if(scoped==='project'){
+              if(!read||!Array.isArray(proposal.edits))return json(422,{error:'scope_unavailable'});
+              const edits=proposal.edits.map(({path,text})=>{
+                const file=projectFiles.find(item=>item.path===path);
+                if(!file||typeof text!=='string')throw Error('scope');
+                if(file.text.includes('\r\n')&&!file.text.replaceAll('\r\n','').includes('\n'))text=text.replace(/\r?\n/g,'\r\n');
+                if(file.text.startsWith('\ufeff')&&!text.startsWith('\ufeff'))text='\ufeff'+text;
+                return {path,text,fileId:file.fileId,before:file.text};
+              });
+              approval=control.execute({action:'code.projectPropose',repository:target,edits});
+            }else if(scoped==='source'){
               if(!read || typeof proposal.text!=='string')return json(422,{error:'attachment_unread'});
               let text=proposal.text;
               if(!codeSnapshot.text.replaceAll('\r\n','').includes('\n') && codeSnapshot.text.includes('\r\n'))
                 text=text.replace(/\r?\n/g,'\r\n');
               if(codeSnapshot.text.startsWith('\ufeff')&&!text.startsWith('\ufeff'))text='\ufeff'+text;
               approval=control.execute({action:'code.propose',grant:target,before:codeSnapshot.text,text});
+            }else if(scoped==='browser'){
+              if(proposal.read!==true || Object.keys(proposal).length!==1)return json(422,{error:'scope_unavailable'});
+              approval=control.execute({action:'browser.propose',url:target});
             }else if(scoped==='desktop'||scoped==='desktopControl'){
               const allowed=scoped==='desktop'?['focus','scrollUp','scrollDown']:['invoke','setText'];
               if(!allowed.includes(proposal.operation))return json(422,{error:'scope_unavailable'});

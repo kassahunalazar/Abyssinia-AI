@@ -20,6 +20,12 @@
       <button id="forget-chat" type="button" hidden>ይህን ውይይት ከአሳሹ ሰርዝ</button>
     </div>
     <div class="sidebar-footer"><span class="dot" aria-hidden="true"></span> በዚህ ኮምፒውተር</div>
+    <nav class="work-links" aria-label="የሥራ መሣሪያዎች">
+      <button type="button" data-work="project-picker">‹ › ኮድ</button>
+      <button type="button" data-work="memo-search">የግል ትውስታ</button>
+      <button type="button" data-work="reminder-title">ቀጠሮዎች</button>
+      <button type="button" data-work="approval-list">ፈቃዶች</button>
+    </nav>
     <button class="nav-button" id="settings-open">⚙ ቅንብሮች · Settings</button>
     <button class="nav-button" id="capabilities-open"><span class="nav-icon" aria-hidden="true">⋈</span> ችሎታዎች</button>
     <button class="nav-button" id="work-open"><span class="nav-icon" aria-hidden="true">▤</span> የሥራ ቦታ</button>
@@ -104,7 +110,13 @@
     <header><h2 id="capabilities-title">ችሎታዎች · Capabilities</h2><button id="capabilities-close" aria-label="ዝጋ">×</button></header>
     <div class="capability-grid">
       <section><h3>ሞዴል አቅራቢዎች</h3><p id="cap-provider"></p><button id="cap-providers">አቅራቢዎችን አስተዳድር</button></section>
-      <section><h3>ክህሎቶች · Skills</h3><div id="cap-skills"></div></section>
+      <section><h3>ክህሎቶች · Skills</h3><div id="cap-skills"></div>
+        <button id="load-skills">የHermes ክህሎቶችን አሳይ</button>
+        <div id="native-library" hidden>
+          <label>ክህሎት ፈልግ<input id="skill-filter" type="search"></label>
+          <select id="native-skill" aria-label="የHermes ክህሎት"></select>
+          <p id="skill-description"></p><button id="choose-skill">ለውይይት ምረጥ</button>
+        </div><output id="skills-status" role="status"></output></section>
       <section><h3>ግንኙነቶች · Connectors</h3><div id="cap-connections"></div><button id="cap-connectors">የMCP ቅንብሮች</button></section>
       <section><h3>መሣሪያዎች · Tools</h3><div id="cap-tools"></div></section>
       <section class="cap-wide"><h3>ኮምፒውተር አጠቃቀም · Computer use</h3><div id="cap-desktop-status"></div><p>መስኮት ይምረጡ፣ ቁልፍ ወይም የጽሑፍ ሳጥን ይለዩ፣ ከዚያ እርምጃውን ይፍቀዱ።</p><button id="cap-desktop">መስኮት ምረጥ</button><button id="cap-observe">የማያ ገጽ ጽሑፍ አንብብ</button></section>
@@ -139,13 +151,38 @@
     <h3>የምንጭ ፍለጋ</h3>
     <form id="research-form"><label>በዊኪፔዲያ ፈልግ<input id="research-query" required maxlength="240"></label>
     <label>የምንጭ ቋንቋ <select id="research-lang"><option value="am">አማርኛ</option><option value="en">English</option></select></label><button>ፈልግ</button></form>
+    <details id="browser-panel">
+      <summary>የድረ ገጽ ጽሑፍ አንባቢ</summary>
+      <form id="browser-form">
+        <label>የአማርኛ ወይም የእንግሊዝኛ ዊኪፔዲያ ገጽ<input id="browser-url" type="url" dir="ltr" maxlength="2048" placeholder="https://en.wikipedia.org/wiki/Addis_Ababa" required></label>
+        <button id="browser-propose">ለማንበብ ፈቃድ ጠይቅ</button>
+        <button id="browser-chat" type="button">በውይይት ጠይቅ</button>
+      </form>
+      <label>የተቀመጠ HTML ገጽ<input id="browser-local" type="file" accept=".html,.htm,text/html"></label>
+      <p id="browser-status" role="status"></p>
+      <div id="browser-result"></div>
+      <button id="browser-attach" type="button" disabled>የገጹን ጽሑፍ ወደ ውይይት አያይዝ</button>
+    </details>
     <div id="sources"></div>
     <h3 id="coding-heading">AK Code Engine · የኮድ ክለሳ</h3>
-    <label>የፕሮጀክት አቃፊ ምረጥ <input type="file" id="project-picker" webkitdirectory multiple></label>
-    <output id="project-branch"></output>
-    <label>ለክለሳ የሚሆን ፋይል <select id="project-file" disabled></select></label>
-    <button id="review-file" type="button" disabled>ፋይሉን ለክለሳ አያይዝ</button>
+    <button id="project-picker" type="button">የፕሮጀክት አቃፊ ምረጥ</button>
     <button id="code-pick" type="button">ለማርትዕ አንድ ፋይል ፍቀድ</button>
+    <section id="project-browser" hidden>
+      <p id="project-root"></p>
+      <p id="project-summary" role="status"></p>
+      <label>ፋይሎችን አጣራ<input id="project-search" type="search"></label>
+      <label>የፕሮጀክት ፋይሎች · Ctrl በመጫን እስከ 4 ይምረጡ<select id="project-file" multiple size="6"></select></label>
+      <button id="project-chat" type="button">የተመረጡትን ፋይሎች በውይይት አርም</button>
+      <button id="project-test" type="button">JS ፈተና አስኪድ</button>
+      <small>የ .test.js ወይም .test.mjs ፋይልና የሚጠቀምባቸውን modules ይምረጡ።</small>
+      <pre id="project-test-output" role="status"></pre>
+      <button id="preview-file" type="button">ይዘቱን አሳይ</button>
+      <button id="open-project-file" type="button">ለማርትዕ ክፈት</button>
+      <button id="review-file" type="button">ለክለሳ አያይዝ</button>
+      <button id="project-refresh" type="button">ፋይሎችን አድስ</button>
+      <button id="project-revoke" type="button">የአቃፊውን ፈቃድ ዝጋ</button>
+      <pre id="project-preview" hidden></pre>
+    </section>
     <section id="code-edit" hidden>
       <p id="code-target"></p>
       <label>የሚፈለገው ለውጥ<input id="code-instruction" maxlength="1000"></label>
@@ -164,10 +201,13 @@
       <button type="button" id="doc-rename">ስም ለመቀየር ፈቃድ ጠይቅ</button>
       <button type="button" id="doc-delete">ለመሰረዝ ፈቃድ ጠይቅ</button>
     </details>
-    <h3>የፈቃድ ጥያቄዎች</h3><div id="approval-list"></div>
-    <h3>የግል ማስታወሻዎች</h3>
+    <h3>የፈቃድ ጥያቄዎች</h3><div id="approval-list" tabindex="-1"></div>
+    <h3>የግል ማስታወሻዎች · Memory</h3>
     <input id="memo-search" type="search" placeholder="ማስታወሻ ፈልግ" aria-label="ማስታወሻ ፈልግ">
-    <form id="memo-form"><label>ማስታወሻ<textarea id="memo-text" required maxlength="1500"></textarea></label><button>አስቀምጥ</button></form>
+    <form id="memo-form"><label>ማስታወሻ<textarea id="memo-text" required maxlength="1500"></textarea></label>
+      <button id="memo-save">አስቀምጥ</button><button id="memo-cancel" type="button" hidden>አርትዖት ሰርዝ</button>
+    </form>
+    <p id="memo-status" role="status"></p>
     <div id="memo-list"></div>
     <h3>ቀጠሮዎች · Schedules</h3>
     <form id="reminder-form">
@@ -178,6 +218,7 @@
       <label>ድግግሞሽ<select id="reminder-repeat"><option value="once">አንድ ጊዜ</option><option value="daily">በየቀኑ</option><option value="weekly">በየሳምንቱ</option></select></label><button>መዝግብ</button></form>
     <label><input id="quiet-hours" type="checkbox"> ከ22:00 እስከ 07:00 ደወሎችን አዘግይ</label>
     <div id="reminders"></div>
+    <details id="schedule-history"><summary>የቀጠሮ ውጤቶች · Run history</summary><div id="schedule-run-list"></div></details>
     <h3>የተከናወኑ ተግባራት</h3><ol id="activity-list"></ol>
   </dialog>
   <dialog id="save-document"><form id="document-form"><h2>መልሱን በፋይል አስቀምጥ</h2>

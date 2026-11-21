@@ -30,12 +30,14 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
     const results=body.messages.filter(m=>m.role==='tool');
     let toolName = !results.length && (names.includes('read_attached_text')?'read_attached_text':names[0]);
     if(names.includes('propose_source_edit') && results.length===1)toolName='propose_source_edit';
+    if(names.includes('propose_project_edits') && results.length===1)toolName='propose_project_edits';
     const needTool = Boolean(toolName);
     const parameters={
       propose_reminder:{title:'ስብሰባ',when:new Date(Date.now()+86400000).toISOString().replace(/\.\d{3}Z$/,'Z'),daily:true},
       request_window_action:{operation:'focus'},
       confirm_tool_call:{code:'READY'},
       propose_source_edit:{text:'export const value = 2;\n'},
+      propose_project_edits:{edits:[{path:'source.mjs',text:'export const value = 3;\n'},{path:'two.mjs',text:'export default 4;\n'}]},
       consult_specialist:{specialty:'coding',task:'Analyze this example'},
       todo_list:{todos:[{id:'one',content:'Review test',status:'pending'}]},
     };
@@ -57,7 +59,7 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   const folder=realpathSync(mkdtempSync(join(tmpdir(),'abyssinia-model-source-')));
   const source=join(folder,'source.mjs');
   writeFileSync(source,'export const value = 1;\n');
-  const app = createAssistant({pickFile:async()=>source}).listen(0,'127.0.0.1');
+  const app = createAssistant({pickFile:async()=>source,pickRepository:async()=>folder}).listen(0,'127.0.0.1');
   await Promise.all([once(endpoint,'listening'),once(app,'listening')]);
   t.after(() => { app.close(); endpoint.close(); });
   const origin = 'http://127.0.0.1:' + app.address().port;
@@ -101,4 +103,19 @@ test('custom endpoint through Hermes, scoped read, chat isolation and no-provide
   const events=(await planned.text()).trim().split('\n').map(line=>JSON.parse(line));
   assert.equal(events.at(-1).status,200);
   assert.ok(events.some(event=>event.activity?.name==='todo_list'), JSON.stringify(events));
+  writeFileSync(join(folder,'two.mjs'),'export default 1;\n');
+  const project=await (await post('/api/control',{action:'code.pickRepository'})).json();
+  const library=await (await post('/api/control',{action:'skills.native'})).json();
+  const selected=library.skills.find(item=>item.category==='software-development');
+  const skill='hermes/'+selected.category+'/'+selected.name;
+  const task=await post('/api/chat',{provider,message:'Fix both selected files',skill,scope:{name:'project',target:project.repository,paths:['source.mjs','two.mjs']}});
+  assert.ok((await task.json()).approval);
+  const review=await (await post('/api/control',{action:'status'})).json();
+  assert.equal(review.approvals.length,2);
+  for(const item of review.approvals){
+    assert.equal(item.tool,'code.projectReplace');
+    assert.equal((await post('/api/control',{action:'approve',id:item.id})).status,200);
+  }
+  assert.equal(readFileSync(source,'utf8'),'export const value = 3;\n');
+  assert.equal(readFileSync(join(folder,'two.mjs'),'utf8'),'export default 4;\n');
 });

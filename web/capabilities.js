@@ -8,7 +8,7 @@ export function selectCapability(next){
   selection=next;
   const chip=field('active-scope');
   chip.hidden=!next.scope&&!next.skill;
-  chip.textContent=[tools[next.scope?.name]?.label,skills[next.skill]?.label].filter(Boolean).join(' · ')+' ×';
+  chip.textContent=[tools[next.scope?.name]?.label,skills[next.skill]?.label ?? next.skill?.split('/').at(-1)].filter(Boolean).join(' · ')+' ×';
 }
 field('active-scope').onclick=()=>selectCapability({});
 function button(label,click){
@@ -32,6 +32,7 @@ field('capabilities-open').onclick=async()=>{
     button(tools.source.label,()=>openWorkspace(null,'code-pick')),
     button(tools.specialist.label,()=>choose({...selection,scope:{name:'specialist'}})),
     button(tools.research.label,()=>choose({...selection,scope:{name:'research'}})),
+    button(tools.browser.label,()=>openWorkspace('browser-panel','browser-url')),
     button('ጽሑፍ አያይዝ',()=>{dialog.close();field('attachment').focus();field('attachment').click()}),
     button('ማስታወሻ ቀጠሮ',()=>{dialog.close();field('work-open').click();field('reminder-title').focus()}));
   try{
@@ -61,6 +62,35 @@ field('cap-connectors').onclick=()=>openWorkspace('connections-panel','mcp-name'
 field('cap-desktop').onclick=()=>openWorkspace('desktop-panel','desktop-enabled');
 field('cap-observe').onclick=()=>openWorkspace(null,'screen-read');
 field('capabilities-close').onclick=()=>dialog.close();
+let catalog=[];
+function describeSkill(){
+  const row=catalog.find(item=>skillId(item)===field('native-skill').value);
+  field('skill-description').textContent=row?.description??'';
+  field('choose-skill').disabled=!row;
+}
+function skillId(item){return 'hermes/'+(item.category??'')+'/'+item.name;}
+function filterSkills(){
+  const term=field('skill-filter').value.trim().toLocaleLowerCase();
+  const matches=catalog.filter(item=>[item.category,item.name,item.description].join(' ').toLocaleLowerCase().includes(term));
+  field('native-skill').replaceChildren(...matches.map(item=>new Option([item.category,item.name].filter(Boolean).join(' / '),skillId(item))));
+  field('skills-status').textContent=matches.length+' ክህሎቶች';
+  describeSkill();
+}
+field('load-skills').onclick=async()=>{
+  field('load-skills').disabled=true;
+  field('skills-status').textContent='በመጫን ላይ…';
+  try{
+    const result=await fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'skills.native'})});
+    if(!result.ok)throw Error();
+    catalog=(await result.json()).skills;
+    field('native-library').hidden=false;
+    filterSkills();
+  }catch{field('skills-status').textContent='ክህሎቶቹን መጫን አልተቻለም። እንደገና ይሞክሩ።';}
+  finally{field('load-skills').disabled=false;}
+};
+field('skill-filter').oninput=filterSkills;
+field('native-skill').onchange=describeSkill;
+field('choose-skill').onclick=()=>choose({...selection,skill:field('native-skill').value});
 field('desktop-chat').onclick=()=>{
   const target=field('desktop-window').value;
   if(!target)return;

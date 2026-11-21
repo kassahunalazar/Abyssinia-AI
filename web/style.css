@@ -179,6 +179,9 @@ dialog#settings { width: min(540px, 94vw); max-height: 86dvh; overflow: auto; bo
 #work pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow:auto}
 #work p,#work li {overflow-wrap:anywhere} #activity-list {max-height:15rem;overflow:auto}
 #work input,#save-document input {width:100%;padding:7px;font:inherit}
+#project-browser {margin-top:10px}
+#project-browser label {display:grid;gap:4px;margin:8px 0}
+#project-file {width:100%;min-width:0;font:inherit;background:var(--surface);border:1px solid var(--border);border-radius:8px}
 
 dialog { background: var(--surface); }
 #theme-setting { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
@@ -264,3 +267,10 @@ summary { cursor:pointer; }
   .engine {max-width:34%; line-height:1.3}
   .capability-grid {grid-template-columns:minmax(0,1fr)}
 }
+
+.work-links {display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:4px 0;}
+.work-links button {border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);padding:6px 3px;font:inherit;font-size:.82rem;cursor:pointer;}
+.work-links button:hover,.work-links button:focus-visible {border-color:var(--accent);color:var(--accent);}
+#native-library label {display:grid;gap:4px;margin-block:8px;}
+#native-library select,#native-library input {width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;}
+#project-test-output:empty {display:none;}

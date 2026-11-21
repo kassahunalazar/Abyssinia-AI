@@ -1,4 +1,16 @@
 export const tools = {
+  project: {
+    label:'የፕሮጀክት ለውጦች',
+    name:'propose_project_edits',
+    description:'Read the selected project files with read_attached_text. Propose complete replacements only for selected files that need changes. Each file is reviewed separately.',
+    properties:{edits:{type:'array',minItems:1,maxItems:4,items:{type:'object',properties:{path:{type:'string'},text:{type:'string'}},required:['path','text'],additionalProperties:false}}},
+  },
+  browser: {
+    label:'የተመረጠ የዊኪፔዲያ ገጽ አንብብ',
+    name:'request_article_read',
+    description:'Request a read of the exact public Wikipedia article already selected by the user. A separate approval is required. Set read to true. The app shows the result after approval.',
+    properties:{read:{type:'boolean',enum:[true]}},
+  },
   research: {
     label:'ምንጮችን ፈልግ',
     name:'find_references',
