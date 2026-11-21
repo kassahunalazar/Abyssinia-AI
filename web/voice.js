@@ -3,6 +3,11 @@ const panel=field('voice-panel');
 const state=field('voice-state');
 const record=field('voice-record'), stop=field('voice-stop'), run=field('voice-run');
 const model=field('voice-model'), transcript=field('voice-transcript');
+field('open-voice').onclick=()=>{
+  field('work-open').click();
+  panel.open=true;
+  panel.scrollIntoView({block:'start'});
+};
 let recorder, pcm, timer, generation=0;
 let grantedModels=[];
 async function post(path,data){
@@ -98,6 +103,12 @@ export async function speakAnswer(text){
   catch{field('status').textContent='ድምፁን ማጫወት አልተቻለም።'}
 }
 export {stopSpeech};
+field('tts-connect').onclick=async()=>{
+  const b=field('tts-connect');b.disabled=true;
+  try{await post('/api/control',{action:'voice.connect'});await outputSettings();}
+  catch{ttsStatus.textContent='የGemini ግንኙነት አልተሳካም።';}
+  finally{b.disabled=false;}
+};
 field('tts-sample').onclick=async()=>{
   field('tts-sample').disabled=true;ttsStatus.textContent='በማዘጋጀት ላይ…';
   try{await playRequest({action:'voice.sample',model:field('tts-model').value,voice:field('tts-voice').value});ttsStatus.textContent='ያዳምጡና ይገምግሙ።';}

@@ -90,6 +90,14 @@ async function refresh() {
     const box = document.createElement('article');
     const body = document.createElement('pre'); body.textContent = item.text;
     if(item.tool==='code.replace'){
+      const original=item.before.split(/\r?\n/), next=item.text.split(/\r?\n/);
+      let start=0, end=0;
+      while(start<Math.min(original.length,next.length) && original[start]===next[start])start++;
+      while(end<Math.min(original.length,next.length)-start && original.at(-1-end)===next.at(-1-end))end++;
+      const changes=document.createElement('pre');
+      changes.textContent=['@@ '+(start+1)+' @@',...original.slice(start,original.length-end).map(l=>'- '+l),
+        ...next.slice(start,next.length-end).map(l=>'+ '+l)].join('\n');
+      box.append(line('የተቀየሩ መስመሮች · Diff'),changes);
       const old=document.createElement('pre');old.textContent=item.before;
       box.append(line('የአሁኑ ይዘት'),old,line('የታቀደ ይዘት'));
     }
@@ -207,7 +215,10 @@ $('research-form').onsubmit=async e=>{
 const projectPicker=$('project-picker');
 const projectFile=$('project-file');
 let projectFiles=[];
-projectPicker.onchange=()=>{
+projectPicker.onchange=async()=>{
+  const selection=projectPicker.files;
+  const head=Array.from(selection).find(f=>f.webkitRelativePath.split('/').slice(1).join('/')==='.git/HEAD' && f.size<=512);
+  $('project-branch').textContent='';
   const excluded=new Set(['node_modules','.git','.runtime','venv','__pycache__','dist','build','vendor','target']);
   projectFiles=Array.from(projectPicker.files).filter(file=>{
     const parts=file.webkitRelativePath.split('/').slice(1);
@@ -217,6 +228,13 @@ projectPicker.onchange=()=>{
   projectFile.replaceChildren(...projectFiles.map((file,i)=>new Option(file.webkitRelativePath,String(i))));
   projectFile.disabled=$('review-file').disabled=!projectFiles.length;
   message(projectFiles.length+' ለክለሳ የሚሆኑ ፋይሎች · እስከ 16 KiB');
+  if(head){
+    try{
+      const ref=(await head.text()).trim();
+      const branch=/^ref: refs\/heads\/([^\s\x00-\x1f]{1,220})$/.exec(ref)?.[1] ?? (/^[0-9a-f]{40,64}$/i.test(ref)?ref.slice(0,12):'');
+      if(branch && projectPicker.files===selection)$('project-branch').textContent='Git · '+branch;
+    }catch{}
+  }
 };
 $('review-file').onclick=()=>{
   const file=projectFiles[projectFile.selectedIndex];

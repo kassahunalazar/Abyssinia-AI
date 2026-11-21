@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Abyssinia AI</title>
+  <script src="/theme.js"></script>
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/app.js"></script>
 </head>
@@ -40,6 +41,7 @@
           <label class="sr-only" for="message">መልዕክትዎን ይጻፉ</label>
           <textarea id="message" rows="2" maxlength="4000" placeholder="ለአቢሲኒያ AI መልዕክት ይጻፉ…" required></textarea>
           <div class="composer-actions">
+            <button id="open-voice" type="button">ድምፅ · Voice</button>
             <span id="status" role="status"></span>
             <span class="engine">Abyssinia AI</span>
             <button id="send" type="submit" aria-label="ላክ" title="ላክ" disabled>↑</button>
@@ -63,6 +65,8 @@
   </main>
   <dialog id="settings" aria-labelledby="settings-title">
     <header><h2 id="settings-title">ቅንብሮች · Settings</h2><button type="button" id="settings-close" aria-label="ዝጋ · Close">×</button></header>
+    <label id="theme-setting" for="theme-choice">ገጽታ · Theme
+      <select id="theme-choice"><option value="system">የስርዓቱ · System</option><option value="dark">ጨለማ · Dark</option><option value="light">ብርሃን · Light</option></select></label>
     <form id="provider-form">
       <label>የሞዴል አቅራቢ · Provider
         <select id="provider-kind">
@@ -93,13 +97,14 @@
     <details id="voice-panel"><summary>የአማርኛ ድምፅ ሙከራ</summary>
       <p>“ሰላም፣ ነገ ጠዋት ስብሰባ አለኝ።” ብለው ይቅረጹ። ተመሳሳይ ድምፅን በሁለቱም ሞዴሎች ይፈትሹ።</p>
       <button type="button" id="voice-record" disabled>ቅዳ</button><button type="button" id="voice-stop" disabled>ቀረጻ አቁም</button>
-      <label>Whisper <select id="voice-model"></select></label>
+      <label>የድምፅ ማወቂያ · STT <select id="voice-model"></select></label>
       <button type="button" id="voice-run" disabled>ድምፁን ወደ ጽሑፍ ቀይር</button>
       <p id="voice-state" role="status"></p><label>ጽሑፉን አርም<textarea id="voice-transcript" rows="3"></textarea></label>
       <button id="voice-use" type="button">ወደ መልዕክት ቅዳ</button>
       <h3>የንባብ ድምፅ ግምገማ</h3>
       <p id="tts-script"></p><p id="tts-status" role="status"></p>
       <select id="tts-model" aria-label="የንባብ ሞዴል"></select><select id="tts-voice" aria-label="ድምፅ"></select>
+      <button id="tts-connect" type="button">Gemini አገናኝ · Connect Gemini</button>
       <button id="tts-sample" type="button" disabled>የሙከራ ድምፅ አዘጋጅ</button>
       <audio id="tts-player" controls hidden></audio>
       <form id="tts-rating" hidden>
@@ -131,6 +136,7 @@
     <div id="sources"></div>
     <h3>AK Code Engine · የኮድ ክለሳ</h3>
     <label>የፕሮጀክት አቃፊ ምረጥ <input type="file" id="project-picker" webkitdirectory multiple></label>
+    <output id="project-branch"></output>
     <label>ለክለሳ የሚሆን ፋይል <select id="project-file" disabled></select></label>
     <button id="review-file" type="button" disabled>ፋይሉን ለክለሳ አያይዝ</button>
     <button id="code-pick" type="button">ለማርትዕ አንድ ፋይል ፍቀድ</button>

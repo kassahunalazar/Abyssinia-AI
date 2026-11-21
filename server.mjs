@@ -12,6 +12,7 @@ import { pickSourceFile, checkDraft } from './code-workspace.mjs';
 import { discoverMcp } from './mcp-connections.mjs';
 import { speechModels, transcribe } from './speech.mjs';
 import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
+import { askGeminiKey } from './gemini-key.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const runtime = resolve(process.env.ASSISTANT_RUNTIME_DIR ?? resolve(root, '.runtime'));
@@ -20,6 +21,7 @@ const limits = { request: 16384, message: 4000, reply: 64000 };
 const assets = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
   '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/controls.js': ['controls.js', 'text/javascript; charset=utf-8'],
   '/voice.js': ['voice.js','text/javascript; charset=utf-8'],
@@ -93,6 +95,8 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
   const session = randomUUID();
   const conversations = new Map();
   let sampleTicket;
+  let sessionVoiceKey;
+  const voiceKey=()=>sessionVoiceKey || process.env.ABYSSINIA_TTS_KEY || process.env.GEMINI_API_KEY;
   const server = createServer({ requestTimeout: 10000, headersTimeout: 5000 }, async (req, res) => {
     const authority = loopback + ':' + server.address().port;
     res.setHeader('Cache-Control', 'no-store');
@@ -141,7 +145,17 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       if (managing) {
-        if(data?.action==='voice.output')return json(200,{configured:!!process.env.ABYSSINIA_TTS_KEY,candidates,voices,speechScript,reviewed:control.reviewedVoice});
+        if(data?.action==='voice.output')return json(200,{configured:!!voiceKey(),candidates,voices,speechScript,reviewed:control.reviewedVoice});
+        if(data?.action==='voice.connect'){
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try{
+            const key=await askGeminiKey(signal);
+            signal.throwIfAborted();
+            if(key){sessionVoiceKey=key;sampleTicket=null;control.record('voice.connect','completed','Gemini');}
+            return json(200,{configured:!!voiceKey()});
+          }catch{return json(409,{error:'unavailable'})}finally{control.end()}
+        }
         if(data?.action==='voice.rate'){
           if(!sampleTicket||data.ticket!==sampleTicket.id||sampleTicket.expires<Date.now()||data.native!==true)return json(409,{error:'review'});
           try{
@@ -152,11 +166,11 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         if(data?.action==='voice.sample'||data?.action==='voice.speak'){
           const sample=data.action==='voice.sample';
           const pair=sample?data:control.reviewedVoice;
-          if(!pair||!process.env.ABYSSINIA_TTS_KEY)return json(409,{error:'unavailable'});
+          if(!pair||!voiceKey())return json(409,{error:'unavailable'});
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
           try{
-            const audio=await synthesize(sample?speechScript:data.text,pair.model,pair.voice,signal);
+            const audio=await synthesize(sample?speechScript:data.text,pair.model,pair.voice,signal,voiceKey());
             signal.throwIfAborted();control.record(data.action,'completed',pair.model+'/'+pair.voice);
             if(sample)sampleTicket={id:randomUUID(),model:pair.model,voice:pair.voice,expires:Date.now()+600000};
             return json(200,{audio,...(sample&&{ticket:sampleTicket.id})});

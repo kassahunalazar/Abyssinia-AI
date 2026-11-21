@@ -38,3 +38,8 @@ The optional Hohe speech model is distributed separately under CC BY 4.0. Origin
 On a new Windows account, the ZIP includes **Setup Abyssinia Engine.cmd**. It runs the verified upstream installer for the exact tested Hermes v0.23.0 commit under your LocalAppData and updates your user PATH. Run it once if the engine is missing. **Open Abyssinia AI.cmd** then opens the product. To install the optional local speech benchmark weights, run `scripts/setup-speech-model.ps1`. The Hohe worker requires Python with NumPy and ONNX Runtime. Set `ASSISTANT_STT_PYTHON` to that interpreter.
 
 **ሰነዶቼ** lists documents saved by the application. Search or read a document, then request approval for a rename or deletion. An MCP server advertising `get_current_time` can perform a timezone lookup after approval. Other discovered tools are shown as metadata.
+## Appearance and Gemini speech
+
+Open Settings → Theme to choose System, Dark or Light. System follows Windows appearance, including changes while the app is open. The browser remembers explicit selections. The palette covers the composer, history, chat messages, dialogs and approval text.
+
+Open Voice from the composer. For Gemini, select **Connect Gemini** and enter your API key in the native Windows password field. The running gateway keeps this key in memory. For persistence you can set ABYSSINIA_TTS_KEY in the backend environment. Generate a sample and rate its naturalness and clarity after listening. Playback requires a native-listener review of that model and voice.

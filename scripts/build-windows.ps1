@@ -2,7 +2,8 @@ param([string]$Destination = (Join-Path $PSScriptRoot '..\.runtime\Abyssinia-AI-
 $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $version = (git -C $project rev-parse --short=12 HEAD).Trim()
-$stage = Join-Path ([IO.Path]::GetTempPath()) ('abyssinia-package-' + [guid]::NewGuid())
+$buildRoot = Join-Path $project '.runtime'
+$stage = Join-Path $buildRoot ('abyssinia-package-' + [guid]::NewGuid())
 $app = Join-Path $stage ('Abyssinia AI\app-' + $version)
 New-Item $app -ItemType Directory -Force | Out-Null
 $sourceArchive = Join-Path $stage 'source.zip'
@@ -47,4 +48,8 @@ $tempZip = Join-Path $stage 'package.zip'
 [IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $stage 'Abyssinia AI'),$tempZip)
 Copy-Item -LiteralPath $tempZip -Destination $artifact -Force
 Write-Output $artifact
+$stagingPath=(Resolve-Path -LiteralPath $stage).Path
+if(([IO.Path]::GetDirectoryName($stagingPath) -eq $buildRoot) -and ([IO.Path]::GetFileName($stagingPath) -match '^abyssinia-package-[a-f0-9-]{36}$')){
+  Remove-Item -LiteralPath $stagingPath -Recurse -Force
+}
 

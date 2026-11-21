@@ -84,3 +84,7 @@ Implemented a one-click Windows launcher for the existing dependencies, browser 
 **KNOWN LIMITATIONS** Notes and transcripts live in the current browser. A model change and a gateway restart affect live conversation context. Coding grants cover individual source files; arbitrary project command execution and Git worktree automation remain open. Desktop actions cover OCR, focus and scrolling. MCP execution currently covers the standard current-time operation only.
 
 **NEXT STEP** Compare the same context-recall and tool-use probes on a dependable Amharic model and obtain a native-listener speech rating.
+
+## Local Amharic speech comparison
+
+Compared one 6.973-second human recording from [Dataset.ET, training row 83](https://huggingface.co/datasets/snapwre/amharic-speech/viewer/default/train?row=83). Whisper tiny and base produced 12 and 13 word errors respectively against the nine-word reference. Hohe INT8 returned all nine words in Ethiopic script in 43.7 seconds through the app worker. It used ህ where the reference uses ሕ and omitted final punctuation. This one recording measures neither general accuracy nor conversational latency. The installed ONNX weights matched the pinned SHA-256. Gemini native-speaker rating is outstanding.
