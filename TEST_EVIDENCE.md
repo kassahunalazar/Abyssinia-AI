@@ -180,3 +180,7 @@ On November 22, 2026, Edge reported actual rendered glyphs from Ethiopia Jiret f
 Edge recorded a supplied Amharic audio file through its microphone test device and the actual local recognizer inserted 51 characters into the editable draft. The composer contained a microphone and Settings had no Voice panel. Edge displayed 47 named provider presets and loaded 1,011 model IDs from the running local OmniRoute catalog. This verifies discovery. Live chat and tool probes both succeeded through installed Hermes and the selected OmniRoute model. Other named services have not all been credential-tested.
 
 The full Windows Node suite passed 58 of 59 tests with installed Hermes, including the Amharic round trip and provider credential isolation. The Edge form approval initially returned HTTP 409. Both browser form tests passed on a separate rerun.
+
+## Narration removed
+
+Verified that both running local gateways reject narration actions and still list dictation models. Edge recorded Amharic audio through its microphone test device and the local recognizer inserted a 51-character editable draft. The rebuilt Windows ZIP passed integrity checks and contains no synthesis adapter or voice setup helper. The full Node suite passed 54 of 56 tests. The Edge form and installed Hermes Amharic round-trip tests failed in that run and each passed on a separate rerun.
