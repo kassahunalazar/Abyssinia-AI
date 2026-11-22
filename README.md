@@ -54,7 +54,7 @@ Use the two controls on the composer. **ተናገር** or Ctrl+B records dictati
 
 Open **ችሎታዎች** for model providers, bundled skills, MCP connectors, available chat tools and Windows controls. Select a skill or tool and add your instruction in the composer. Choose the window or the connector and its tool before asking Hermes for an action. Focus, scroll and MCP calls require their own approval. Use the chat and tool tests in Settings to check a provider separately for each capability.
 
-Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, showing the last result and the next run. Keep the local gateway running for scheduled work. The bundled Amharic interface font is Noto Sans Ethiopic, with its SIL Open Font License included under web/fonts.
+Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, showing the last result and the next run. Keep the local gateway running for scheduled work. The interface uses locally installed Ethiopia Jiret for body text, Ethiopic Yigezu Bisrat Gothic for the brand, and Waldba Fantuwua for titles. The bundled Noto Sans Ethiopic supplies fallback glyphs. Its SIL Open Font License is included under web/fonts.
 
 ## Windows computer use and Hermes coding
 

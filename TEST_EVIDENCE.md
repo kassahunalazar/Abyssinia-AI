@@ -170,3 +170,7 @@ A fresh authenticated gateway generated an 8.216-second, mono 16 kHz PCM WAV wit
 **NEXT STEP** — Qualify a voice with native listeners before enabling it for narration by default.
 
 The published Windows ZIP installed successfully on a fresh Windows Server 2022 runner. The installed Hermes passed the Amharic integration and skill catalog checks. The package also rendered in Edge at 1440 and 390 pixels with no uncaught page errors or horizontal overflow. [Windows installation and Docker verification](https://github.com/kassahunalazar/amharic-hermes/actions/runs/44973110564)
+
+## Local typography verification
+
+On November 22, 2026, Edge reported actual rendered glyphs from Ethiopia Jiret for body copy, Ethiopic Yigezu Bisrat Gothic for the wordmark, and Waldba Fantuwua for the welcome and card titles. The installed files matched the three supplied TTF files by SHA-256. The page fit both 1440 and 390 pixel viewports. The full Windows suite with installed Hermes passed 57 of 58 tests, including the real Hermes integration. The Edge form test initially returned HTTP 409 and passed on a separate rerun (2 of 2 browser form tests passed).
