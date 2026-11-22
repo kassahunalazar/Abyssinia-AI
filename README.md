@@ -37,7 +37,7 @@ The optional Hohe speech model is distributed separately under CC BY 4.0. Origin
 
 On a new Windows account, the ZIP includes **Setup Abyssinia Engine.cmd**. It runs the verified upstream installer for the exact tested Hermes v0.23.0 commit under your LocalAppData and updates your user PATH. Run it once if the engine is missing. **Open Abyssinia AI.cmd** then opens the product. To install the optional local speech benchmark weights, run `scripts/setup-speech-model.ps1`. The Hohe worker requires Python with NumPy and ONNX Runtime. Set `ASSISTANT_STT_PYTHON` to that interpreter.
 
-**ሰነዶቼ** lists documents saved by the application. Search or read a document, then request approval for a rename or deletion. An MCP server advertising `get_current_time` can perform a timezone lookup after approval. Other discovered tools are shown as metadata.
+**ሰነዶቼ** lists documents saved by the application. Search or read a document, then request approval for a rename or deletion. Connections can request `get_current_time`, `convert_time`, `add`, `subtract`, `multiply` and `divide` when the local server advertises them. Review the endpoint, tool and arguments in the approval inbox. Other discovered tools appear in the catalog.
 ## Appearance and Gemini speech
 
 Open Settings → Theme to choose System, Dark or Light. System follows Windows appearance, including changes while the app is open. The browser remembers explicit selections. The palette covers the composer, history, chat messages, dialogs and approval text.
@@ -50,9 +50,9 @@ Ask **ከአምስት ደቂቃ በኋላ ውሃ መጠጣት አስታውሰኝ
 
 ## Voice and capabilities
 
-Use the two controls on the composer. **ተናገር** or Ctrl+B records dictation and inserts the transcript into the editable message. After speech starts, three seconds of silence ends the recording. **ድምፅ** reads new completed replies using the reviewed Gemini voice. Click it again or start dictation to interrupt playback. Settings → Voice contains the transcription model, Gemini connection, voice preview and playback speed.
+Use the two controls on the composer. **ተናገር** or Ctrl+B records dictation and inserts the transcript into the editable message. After speech starts, three seconds of silence ends the recording. **ድምፅ** reads new completed replies using the selected, reviewed voice. Click it again or start dictation to interrupt playback. Settings → Voice contains the transcription model, Gemini connection, voice preview and playback speed.
 
-Open **ችሎታዎች** for model providers, bundled skills, MCP connectors, available chat tools and Windows controls. Select a skill or tool and add your instruction in the composer. Choose a window or connector before asking Hermes for an action against it. Focus, scroll and MCP clock lookup require their own approval. Use the chat and tool tests in Settings to check a provider separately for each capability.
+Open **ችሎታዎች** for model providers, bundled skills, MCP connectors, available chat tools and Windows controls. Select a skill or tool and add your instruction in the composer. Choose the window or the connector and its tool before asking Hermes for an action. Focus, scroll and MCP calls require their own approval. Use the chat and tool tests in Settings to check a provider separately for each capability.
 
 Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, showing the last result and the next run. Keep the local gateway running for scheduled work. The bundled Amharic interface font is Noto Sans Ethiopic, with its SIL Open Font License included under web/fonts.
 
@@ -60,7 +60,7 @@ Schedules can run a fixed public Wikipedia source lookup once, daily or weekly, 
 
 Open Capabilities → Computer use. Enable control, list windows, select a window and scan for buttons or editable fields. Select a discovered control and request the exact action. Review the approval to click a button or replace text with the value shown. You can also select the control for chat and describe the action in Amharic. Windows UI Automation determines available controls. Passwords, disabled controls and read-only inputs are excluded. Rescanning invalidates old control selections.
 
-Open AK Code Engine and select one source file. Describe the change in Amharic or English and ask Hermes to prepare it. Hermes calls the scoped read and edit proposal tools. The approval inbox shows the diff and complete content before writing. You can check JavaScript or Python syntax and request rollback. The Windows host needs an isolated execution backend before the product can run arbitrary project commands.
+Open AK Code Engine and select one source file. Describe the change in Amharic or English and ask Hermes to prepare it. Hermes calls the scoped read and edit proposal tools. The approval inbox shows the diff and complete content before writing. You can check JavaScript or Python syntax and request rollback. To work on a private copy of committed files, select a Git repository and approve a detached worktree. Choose status, diff or literal search to inspect it, directly or from chat. For general commands, configure a local Docker Linux engine and an already installed image with ASSISTANT_PROJECT_CONTAINER_IMAGE. The command runs on a snapshot and reports its output and exit code.
 
 For a second Hermes opinion, select the specialist tool in Capabilities and describe the analysis. One separate Hermes turn receives the bounded task. It has no file or tool permissions. The planning skill can use the installed Hermes todo_list tool, with tool activity visible while it runs.
 
@@ -75,3 +75,9 @@ For JavaScript tests, select the synchronous `.test.js` or `.test.mjs` file and 
 The article reader previews approved English and Amharic Wikipedia articles and can extract text from a locally selected HTML file. Linked articles require their own approval. Select the preview for chat to send its text to the configured model.
 
 The bundled test engine uses quickjs-emscripten-core and @jitl/quickjs-singlefile-cjs-release-sync 0.32.0, bundled for Node with esbuild 0.28.2. The distribution notices are in vendor/quickjs/LICENSE.
+
+## Approved browser forms and local speech
+
+In the browser workspace, open a public HTTPS page with Edge. Select a visible text field, checkbox or list. Review the destination and field values before approving submission. This isolated reader supports ordinary HTML forms. Sites that require scripts, sign-in, cookies or uploads need a different workflow.
+
+For a local Amharic speech sample on Windows, run **Setup Local Amharic Voice.cmd** after engine setup, then open Settings → Voice. The optional model runs on CPU. It uses noncommercial Meta MMS weights, downloaded separately. A native-speaker review of the selected model and voice is required before it can narrate replies. [Model and license](https://huggingface.co/facebook/mms-tts-amh)

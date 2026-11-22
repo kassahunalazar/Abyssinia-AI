@@ -1,4 +1,22 @@
 export const tools = {
+  worktreeInspect: {
+    label:'የworktree ክለሳ',
+    name:'request_worktree_inspection',
+    description:'Request Git status, Git diff, or a literal text search on the selected private worktree. Supply a search phrase only for grep, otherwise an empty string. The user reviews the request.',
+    properties:{operation:{type:'string',enum:['status','diff','grep']},query:{type:'string'}},
+  },
+  projectCommand: {
+    label:'የፕሮጀክት ትዕዛዝ',
+    name:'request_project_command',
+    description:'Propose one program and its argument list in the configured offline Linux project container. The current worktree snapshot and exact command require separate approval. Output is shown to the user.',
+    properties:{command:{type:'string'},args:{type:'array',items:{type:'string'},maxItems:32}},
+  },
+  browserForm: {
+    label:'የተመረጠ የድረ ገጽ መስክ',
+    name:'request_browser_field',
+    description:'Request one action for the exact browser form control already selected by the user. Value must be the exact text to fill, true or false to check, the option index for a list, or an empty string to submit. The user must approve the action.',
+    properties:{value:{type:'string'}},
+  },
   project: {
     label:'የፕሮጀክት ለውጦች',
     name:'propose_project_edits',
@@ -47,6 +65,7 @@ export const tools = {
     description:'Request a clock lookup from the MCP connection selected by the user. A separate approval is required.',
     properties:{timezone:{type:'string',description:'IANA timezone such as Africa/Addis_Ababa'}},
   },
+  mcp: { label:'የMCP መሣሪያ' },
 };
 export const skills={
   summarize:{label:'ሰነድ ማጠቃለል',guidance:'Extract the main points from the attached document, distinguish facts and uncertainty, and quote only where useful. Ask for the document if it is missing.'},

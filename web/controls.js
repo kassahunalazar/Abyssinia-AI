@@ -1,12 +1,15 @@
 import './voice.js';
 import { currentProvider } from './settings.js';
 import { chooseBrowserArticle, initializeBrowserReader, showBrowserPage } from './browser-reader.js';
+import { initializeBrowserForms, showBrowserForm } from './browser-forms.js';
 const $ = id => document.getElementById(id);
 let stopped = false;
 let displayedApprovals;
+let displayedConnections;
 let codeFile = null;
 let project = null;
 let projectBusy = false;
+let worktreeState = {};
 export const paused = () => stopped;
 function button(label, handler) {
   const b = document.createElement('button');
@@ -50,17 +53,71 @@ for(const operation of ['rename','delete']){
   };
 }
 async function decide(id, decision) {
-  try { const result=await action(decision,{id}); message(result.datetime ? result.timezone+' · '+result.datetime : decision === 'approve' ? 'ጥያቄው ተፈጽሟል።' : 'ጥያቄው ውድቅ ሆኗል።');
-    if (result.browserPage) showBrowserPage(result.browserPage);
+  try { const result=await action(decision,{id}); message(decision === 'approve' ? 'ጥያቄው ተፈጽሟል።' : 'ጥያቄው ውድቅ ሆኗል።');
+    if (result.datetime) message(result.timezone+' · '+result.datetime);
+    else if (result.mcpResult) message(result.mcpResult.tool+' · '+result.mcpResult.text);
+    else if (result.browserForm) { showBrowserForm(result.browserForm); $('edge-panel').open=true; $('edge-panel').scrollIntoView({block:'nearest'}); }
+    else if (result.browserPage) showBrowserPage(result.browserPage);
     else if(result.tests){
       const {passed,rows,error}=result.tests;
       $('project-test-output').textContent=[passed?'PASS':'FAIL',error,...rows.map(row=>(row.passed?'✓ ':'✗ ')+row.name+(row.error?' · '+row.error:''))].filter(Boolean).join('\n');
       $('project-test-output').scrollIntoView({block:'center'});
     }
+    else if(result.projectWorktree) {
+      $('project-worktree-panel').open=true;
+      $('project-worktree-status').scrollIntoView({block:'center'});
+    }
+    else if(result.projectCommand) {
+      const {code,output,truncated}=result.projectCommand;
+      const display=$('project-command-output');
+      display.textContent=['Exit code '+code,output||'የሚታይ ውጤት የለም።',truncated&&'ውጤቱ አጥሯል።'].filter(Boolean).join('\n');
+      display.hidden=false;
+      display.scrollIntoView({block:'center'});
+    }
     else if(decision==='approve'&&codeFile){const s=await action('code.read');if(s.grant===codeFile?.grant&&s.text!==codeFile.text)loadCode(s);}
   }
   catch(e) { message(e.message); }
   await refresh();await listDocuments();
+}
+function mcpToolForm(connection) {
+  const form=document.createElement('form');
+  const select=document.createElement('select');
+  const fields=document.createElement('div');
+  select.setAttribute('aria-label','የMCP መሣሪያ · MCP tool');
+  select.replaceChildren(...connection.callable.map(tool=>new Option(tool.name,tool.name)));
+  const selected=()=>connection.callable.find(tool=>tool.name===select.value);
+  function drawFields() {
+    fields.replaceChildren(...Object.entries(selected().fields).map(([name,type])=>{
+      const label=document.createElement('label');
+      const input=document.createElement('input');
+      label.textContent=name;
+      input.name=name;
+      input.required=true;
+      if(type==='number'){input.type='number';input.step='any';input.min=-1e12;input.max=1e12;}
+      else if(type==='timezone'){input.value=name==='source_tz'?'UTC':'Africa/Addis_Ababa';input.maxLength=80;}
+      else if(type==='clock'){input.placeholder='HH:mm';input.pattern='([01][0-9]|2[0-3]):[0-5][0-9]';}
+      label.append(input);
+      return label;
+    }));
+  }
+  const submit=document.createElement('button');
+  submit.type='submit';submit.textContent='ፈቃድ ጠይቅ · Request approval';
+  select.onchange=drawFields;
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    submit.disabled=true;
+    const tool=selected();
+    const args=Object.fromEntries(Object.entries(tool.fields).map(([name,type])=>{
+      const input=form.elements.namedItem(name);
+      return [name,type==='number'?input.valueAsNumber:input.value];
+    }));
+    try{await action('mcp.call',{id:connection.id,tool:tool.name,arguments:args});await refresh();$('approval-list').scrollIntoView();}
+    catch(e){message(e.message);}
+    finally{submit.disabled=false;}
+  };
+  form.append(select,fields,submit);
+  drawFields();
+  return form;
 }
 const labels = { chat:'ውይይት', 'file.create':'ፋይል መፍጠር','provider.test':'አቅራቢ መፈተሽ','attachment.read':'አባሪ ማንበብ',agent:'አጋዥ',
   'memory.create':'ማስታወሻ ተቀምጧል','memory.update':'ማስታወሻ ታርሟል','memory.delete':'ማስታወሻ ተሰርዟል','memory.import':'ማስታወሻ ገብቷል',
@@ -81,21 +138,23 @@ async function refresh() {
     loadProject(s.repository ? { repository:s.repository, root:s.repositoryRoot, files:[] } : null);
     if(s.repository) await projectOperation(reloadProject);
   }
+  worktreeState={git:s.gitAvailable,worktree:s.projectWorktree,image:s.projectCommandImage,viewing:s.viewingWorktree};
   projectButtons();
-  $('mcp-list').replaceChildren(...s.connections.map(c=>{
-    const box=document.createElement('article');
-    box.append(line(c.name+' · '+c.url),line(!c.enabled?'ተዘግቷል':!c.checked?'ገና አልተፈተሸም':c.error?'ግንኙነት አልተሳካም':'ተገናኝቷል'),
-      line((c.tools??[]).join(', ')));
-    if(c.checked)box.append(line(new Date(c.checked).toLocaleString()+' · '+c.capabilities.join(', ')));
-    if(c.enabled)box.append(button('መሣሪያዎችን ፈትሽ',()=>mcpAction('mcp.check',c.id)));
-    if(c.enabled && c.tools.includes('get_current_time')){
-      const timezone=document.createElement('input');timezone.value='Africa/Addis_Ababa';timezone.setAttribute('aria-label','Time zone');
-      box.append(timezone,button('ሰዓት ጠይቅ',async()=>{try{await action('mcp.time',{id:c.id,timezone:timezone.value});await refresh();$('approval-list').scrollIntoView();}catch(e){message(e.message);}}));
-    }
-    box.append(button(c.enabled?'አሰናክል':'አንቃ',()=>mcpAction('mcp.toggle',c.id)),
-      button('አስወግድ',()=>{if(confirm('ግንኙነቱ ይወገድ?'))mcpAction('mcp.remove',c.id)}));
-    return box;
-  }));
+  const connectionState=JSON.stringify([stopped,s.connections]);
+  if(displayedConnections!==connectionState){
+    displayedConnections=connectionState;
+    $('mcp-list').replaceChildren(...s.connections.map(c=>{
+      const box=document.createElement('article');
+      box.append(line(c.name+' · '+c.url),line(!c.enabled?'ተዘግቷል':!c.checked?'ገና አልተፈተሸም':c.error?'ግንኙነት አልተሳካም':'ተገናኝቷል'),
+        line((c.tools??[]).join(', ')));
+      if(c.checked)box.append(line(new Date(c.checked).toLocaleString()+' · '+c.capabilities.join(', ')));
+      if(c.enabled)box.append(button('መሣሪያዎችን ፈትሽ',()=>mcpAction('mcp.check',c.id)));
+      if(c.enabled && !stopped && c.callable?.length)box.append(mcpToolForm(c));
+      box.append(button(c.enabled?'አሰናክል':'አንቃ',()=>mcpAction('mcp.toggle',c.id)),
+        button('አስወግድ',()=>{if(confirm('ግንኙነቱ ይወገድ?'))mcpAction('mcp.remove',c.id)}));
+      return box;
+    }));
+  }
   $('reminders').replaceChildren(...s.reminders.map(r=>{
     const box=document.createElement('article');
     const finished=r.job==='research' ? (r.jobResult?.status==='failed' ? 'ፍለጋው አልተሳካም።' : 'ተጠናቋል') : 'ደርሷል';
@@ -141,7 +200,7 @@ async function refresh() {
     if (!s.approvals.length) $('approval-list').append(line('የሚጠብቅ ጥያቄ የለም።'));
   }
   $('activity-list').replaceChildren(...s.events.map(e => {
-    const li = document.createElement('li'); li.textContent = [new Date(e.time).toLocaleString(),labels[e.action] ?? e.action,labels[e.result] ?? e.result,e.target].filter(Boolean).join(' · '); return li;
+    const li = document.createElement('li'); li.textContent = [new Date(e.time).toLocaleString(),labels[e.action] ?? e.action,labels[e.result] ?? e.result,e.target,e.arguments&&JSON.stringify(e.arguments)].filter(Boolean).join(' · '); return li;
   }));
   if($('schedule-history').open && $('work').open)await displayScheduleHistory();
 }
@@ -318,6 +377,7 @@ $('memo-form').onsubmit=e=>{
   });
 };
 refresh().catch(()=>{ $('agent-pause').title='ሁኔታውን መጫን አልተቻለም።'; });
+initializeBrowserForms(action,async(scroll=true)=>{await refresh();if(scroll)$('approval-list').scrollIntoView({block:'nearest'});});
 initializeBrowserReader(async url => {
   await action('browser.propose',{url});
   await refresh();
@@ -359,6 +419,20 @@ function projectButtons(){
   const selected=Array.from($('project-file').selectedOptions,option=>project?.files.find(item=>item.path===option.value));
   $('project-chat').disabled=projectBusy||!selected.length||selected.length>4||selected.some(item=>!item?.editable)||selected.reduce((sum,item)=>sum+(item?.size??0),0)>16384;
   $('project-test').disabled=$('project-chat').disabled||!selected.some(item=>/\.test\.m?js$/i.test(item?.path))||selected.some(item=>!/\.m?js$/i.test(item?.path));
+  const {git,worktree,image,viewing}=worktreeState;
+  $('project-worktree-create').hidden=!!viewing;
+  $('project-worktree-create').disabled=projectBusy||!project||!git;
+  $('project-worktree-status').textContent=worktree ? worktree.revision.slice(0,12)+' · '+worktree.path :
+    git ? '' : 'Git አልተገኘም።';
+  $('project-command-status').textContent=image ? 'የተነጠለ የትዕዛዝ አካባቢ · '+image :
+    'የተነጠለ Docker አካባቢ አልተዋቀረም።';
+  $('project-command-form').hidden=!worktree||!image;
+  $('project-command-ask').disabled=projectBusy;
+  $('project-worktree-tools').hidden=!worktree;
+  $('project-worktree-open').hidden=!!viewing;
+  $('project-worktree-back').hidden=!viewing;
+  for(const id of ['project-worktree-open','project-worktree-back','project-worktree-git-status','project-worktree-diff'])
+    $(id).disabled=projectBusy;
   $('project-picker').disabled=stopped||projectBusy;
   $('project-search').disabled=$('project-file').disabled=projectBusy;
   $('project-refresh').disabled=$('project-revoke').disabled=projectBusy||!project;
@@ -382,7 +456,12 @@ function filterProject(){
   clearProjectPreview();
 }
 function loadProject(result){
-  if(result?.repository!==project?.repository)$('project-search').value='';
+  if(result?.repository!==project?.repository){
+    $('project-search').value='';
+    $('project-command-output').hidden=true;
+    $('project-command-output').textContent='';
+    $('project-command-form').reset();
+  }
   project=result;
   $('project-browser').hidden=!project;
   $('project-root').textContent=project?.root??'';
@@ -399,6 +478,52 @@ async function projectOperation(operation){
 }
 const reloadProject=async()=>loadProject(await action('code.repository',{repository:project.repository}));
 const readProjectFile=(name,file)=>action(name,{repository:project.repository,path:file.path});
+$('project-worktree-create').onclick=()=>projectOperation(async()=>{
+  await action('code.worktree',{repository:project.repository});
+  await refresh();
+  $('approval-list').scrollIntoView();
+});
+function switchWorktree(name){
+  return projectOperation(async()=>{
+    const map=await action(name,{repository:project.repository});
+    clearCode();
+    loadProject(map);
+    await refresh();
+  });
+}
+$('project-worktree-open').onclick=()=>switchWorktree('code.openWorktree');
+$('project-worktree-back').onclick=()=>switchWorktree('code.backToProject');
+function inspectWorktree(operation,query){
+  return projectOperation(async()=>{
+    await action('code.worktreeInspect',{repository:project.repository,operation,query});
+    await refresh();
+    $('approval-list').scrollIntoView();
+  });
+}
+$('project-worktree-git-status').onclick=()=>inspectWorktree('status');
+$('project-worktree-diff').onclick=()=>inspectWorktree('diff');
+for(const [id,name] of [['worktree-inspect-chat','worktreeInspect'],['worktree-command-chat','projectCommand']]){
+  $(id).onclick=async()=>{
+    if(!project)return;
+    const {selectCapability}=await import('./capabilities.js');
+    selectCapability({scope:{name,target:project.repository}});
+    $('work').close();$('message').focus();
+  };
+}
+$('project-worktree-grep-form').onsubmit=event=>{
+  event.preventDefault();
+  return inspectWorktree('grep',$('project-worktree-query').value);
+};
+$('project-command-form').onsubmit=event=>{
+  event.preventDefault();
+  return projectOperation(async()=>{
+    const command=$('project-command-name').value.trim();
+    const args=$('project-command-args').value.split(/\r?\n/u).filter(Boolean);
+    await action('code.command',{repository:project.repository,command,args});
+    await refresh();
+    $('approval-list').scrollIntoView();
+  });
+};
 $('project-search').oninput=filterProject;
 $('project-file').onchange=clearProjectPreview;
 $('project-test').onclick=()=>projectOperation(async()=>{

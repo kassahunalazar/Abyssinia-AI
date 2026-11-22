@@ -146,3 +146,9 @@ Edge on Windows verified system dark mode, explicit light and dark selections, p
 The subsequent live checks passed after starting the installed OmniRoute service on 127.0.0.1. The app returned Amharic text and recalled the exact generated marker in the following chat turn. A separately approved live Addis Ababa article returned 1,208 characters and 12 links. The Edge desktop flow applied the approved Amharic value and invoked one native Windows button. Extracting the Windows ZIP into a new temporary folder, launching the packaged Node/gateway against installed Hermes, loading all 39 skills and running a packaged QuickJS assertion also passed.
 
 A live OmniRoute/Hermes coding task subsequently read two granted JavaScript files, proposed both exact edits, and produced a passing test after two independent approvals. On a fresh Windows Server 2022 GitHub runner, the published full ZIP downloaded, the packaged engine setup completed and the real Hermes Amharic chat and stock-skill tests passed. [Clean Windows installation run](https://github.com/kassahunalazar/amharic-hermes/actions/runs/44945295227)
+
+## Worktree, browser form, MCP and local voice verification
+
+The Windows worktree and Edge form integration tests passed. The worktree test created and edited a private checkout and inspected its diff. The browser test submitted approved Amharic form data. The MCP suite exercised the installed Hermes harness and a real loopback MCP SDK server with a deterministic tool-calling model fixture.
+
+A fresh authenticated gateway generated an 8.216-second, mono 16 kHz PCM WAV with the optional MMS model and both cloud keys unset. Edge played the entire sample. Unauthenticated access returned 401 and unreviewed narration returned 409. No listener rating was submitted. In a separate speech round trip the recognizer transcribed the English word “update” as “ጉዳት”. This leaves naturalness and mixed-language quality open.

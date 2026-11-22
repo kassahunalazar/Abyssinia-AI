@@ -8,7 +8,7 @@ export function selectCapability(next){
   selection=next;
   const chip=field('active-scope');
   chip.hidden=!next.scope&&!next.skill;
-  chip.textContent=[tools[next.scope?.name]?.label,skills[next.skill]?.label ?? next.skill?.split('/').at(-1)].filter(Boolean).join(' · ')+' ×';
+  chip.textContent=[tools[next.scope?.name]?.label,next.scope?.connectorLabel,next.scope?.tool,skills[next.skill]?.label ?? next.skill?.split('/').at(-1)].filter(Boolean).join(' · ')+' ×';
 }
 field('active-scope').onclick=()=>selectCapability({});
 function button(label,click){
@@ -33,6 +33,7 @@ field('capabilities-open').onclick=async()=>{
     button(tools.specialist.label,()=>choose({...selection,scope:{name:'specialist'}})),
     button(tools.research.label,()=>choose({...selection,scope:{name:'research'}})),
     button(tools.browser.label,()=>openWorkspace('browser-panel','browser-url')),
+    button(tools.browserForm.label,()=>openWorkspace('edge-panel','edge-url')),
     button('ጽሑፍ አያይዝ',()=>{dialog.close();field('attachment').focus();field('attachment').click()}),
     button('ማስታወሻ ቀጠሮ',()=>{dialog.close();field('work-open').click();field('reminder-title').focus()}));
   try{
@@ -43,8 +44,10 @@ field('capabilities-open').onclick=async()=>{
     field('cap-connections').replaceChildren(...connections.map(connection=>{
       const item=document.createElement('div');
       item.append(line(connection.name+' · '+(!connection.enabled?'ተሰናክሏል':connection.error?'ግንኙነት አልተሳካም':connection.checked?'ተገናኝቷል':'ገና አልተፈተሸም')));
-      if(connection.enabled&&connection.tools?.includes('get_current_time')){
-        item.append(button(tools.clock.label,()=>choose({...selection,scope:{name:'clock',target:connection.id}})));
+      if(connection.enabled&&!paused){
+        for(const {name} of connection.callable??[]){
+          item.append(button(name,()=>choose({...selection,scope:{name:'mcp',target:connection.id,tool:name,connectorLabel:connection.name}})));
+        }
       }
       return item;
     }));

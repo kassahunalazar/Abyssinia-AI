@@ -1,25 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { snapshotFile, replaceReviewed } from './code-workspace.mjs';
 import { checkRepository, grantRepository, inspectRepository, readRepositoryFile } from './repository-workspace.mjs';
-import { mcpCurrentTime, mcpEndpoint } from './mcp-connections.mjs';
+import { callableMcpTools, invokeMcpTool, mcpEndpoint, validateMcpCall } from './mcp-connections.mjs';
 import { windowAction } from './desktop-control.mjs';
 import { readWikiArticle, wikiArticle } from './browser-reader.mjs';
+import { browserFormControl } from './browser-form-control.mjs';
 import { runProjectTests } from './project-tests.mjs';
+import { createProjectWorktree, inspectProjectWorktree, localTool, projectHead, snapshotWorktree } from './project-worktree.mjs';
+import { projectCommand, projectCommandConfig, runProjectCommand } from './project-command.mjs';
 
 const memoryId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
 const scheduleHistoryLimit = 100;
 
-export function workspaceControl(directory, now = Date.now, desktop = windowAction, readArticle = readWikiArticle) {
+export function workspaceControl(directory, now = Date.now, desktop = windowAction, readArticle = readWikiArticle, formOptions) {
   directory = resolve(directory);
   mkdirSync(directory, { recursive: true });
   const workspace = join(directory, 'documents');
   const stateFile = join(directory, 'activity.json');
   let state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : { paused: false, events: [] };
   const pending = new Map();
+  const forms = browserFormControl(formOptions);
   let grant;
   let repository;
+  let projectWorktree;
+  let runningProject;
   function documentPath(name) {
     if(typeof name!=='string'||!/^([\p{L}\p{M}\p{N} _-]{1,80})\.(txt|md)$/iu.test(name)||
        /^(CON|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³]) *\./i.test(name))throw Error('invalid');
@@ -36,15 +42,28 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
     if (state.paused || !repository || repository.id !== id) throw Error('unavailable');
     return repository;
   }
-  function clearProjectApprovals(){
-    for(const [id,item] of pending)if(['code.projectReplace','code.test'].includes(item.tool)){
+  function clearProjectApprovals({ keepWorktree = false } = {}){
+    if (runningProject) active?.abort();
+    if (!keepWorktree) projectWorktree=undefined;
+    for(const [id,item] of pending)if(['code.projectReplace','code.test','code.worktree','code.command','code.worktreeInspect'].includes(item.tool)){
       pending.delete(id);record(item.tool,'cancelled',item.target);
     }
   }
+  function worktreeView() {
+    if (projectWorktree) return { revision:projectWorktree.revision, path:projectWorktree.path };
+  }
+  function scopeSnapshot(scope) {
+    if (!scope) return snapshotFile;
+    return (path, identity) => {
+      const snapshot = readRepositoryFile(scope, relative(scope.root, path).split(sep).join('/'));
+      if (!snapshot.editable || snapshot.target !== path) throw Error('invalid');
+      if (identity && identity !== snapshot.fileId) throw Error('stale');
+      return snapshot;
+    };
+  }
   function grantSource(path, { fileId: expectedFileId, repository: scope } = {}) {
     if (state.paused) throw Error('unavailable');
-    const { text, fileId } = snapshotFile(path, expectedFileId);
-    if (scope) checkRepository(scope);
+    const { text, fileId } = scopeSnapshot(scope)(path, expectedFileId);
     revokeEdits();
     const id = randomUUID();
     record('code.grant', 'approved', path);
@@ -52,8 +71,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
     return { grant: id, target: path, text };
   }
   function readSource() {
-    if (grant.repository) checkRepository(grant.repository);
-    return snapshotFile(grant.path, grant.fileId).text;
+    return scopeSnapshot(grant.repository)(grant.path, grant.fileId).text;
   }
   let active;
   let desktopEnabled=false;
@@ -69,16 +87,20 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       pending.delete(id);record(item.tool,'cancelled',item.target);
     }
   }
-  function record(action, result, target = '', paused = state.paused, changes = {}) {
-    const event = { time: new Date(now()).toISOString(), action, result, target };
+  function record(action, result, target = '', paused = state.paused, changes = {}, details) {
+    const event = { time: new Date(now()).toISOString(), action, result, target, ...details };
     const next = { ...state, ...changes, paused, events: [...state.events.slice(-199), event] };
     writeFileSync(stateFile + '.tmp', JSON.stringify(next), { mode: 0o600 });
     renameSync(stateFile + '.tmp', stateFile);
     state = next;
   }
+  function recordApproval(item, result) {
+    const details=item.mcpTool?{approval:item.id,arguments:item.mcpArgs}:undefined;
+    record(item.tool,result,item.logTarget??item.target,undefined,undefined,details);
+  }
   function expire() {
     for (const [id, item] of pending) if (item.expires <= now()) {
-      pending.delete(id); record(item.tool, 'expired', item.target);
+      pending.delete(id); recordApproval(item, 'expired');
     }
   }
   function scheduleHistory() {
@@ -95,8 +117,22 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
     const scheduleRuns = [run, ...scheduleHistory()].slice(0, scheduleHistoryLimit);
     record(job === 'research' ? 'schedule.research' : 'reminder', outcome, due.title, state.paused, { reminders, scheduleRuns });
   }
+  function queueForm(item) {
+    if (state.paused || pending.size >= 16) throw Error('unavailable');
+    item = {...item,id:randomUUID(),agent:'Abyssinia AI',expires:now()+120000};
+    pending.set(item.id,item);
+    record(item.tool,'requested',item.logTarget);
+    return {id:item.id};
+  }
   return {
     get paused() { return state.paused; },
+    closeBrowser: forms.close,
+    selectBrowserField: forms.select,
+    async proposeBrowserField(data,signal) {
+      const item = await forms.proposeAction(data,signal);
+      signal.throwIfAborted();
+      return queueForm(item);
+    },
     begin() {
       if (state.paused || active) return null;
       active = new AbortController();
@@ -234,8 +270,10 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         return { paused: state.paused, running: Boolean(active), workspace,
           codeTarget:grant?.path, codeGrant:grant?.id, canUndo:Boolean(grant?.undo),
           repository:repository?.id, repositoryRoot:repository?.root,
+          projectWorktree:worktreeView(), gitAvailable:Boolean(localTool('git')), viewingWorktree:!!repository?.worktree,
+          projectCommandImage:projectCommandConfig()?.image,
           desktopEnabled,
-          connections:state.connections??[],
+          connections:(state.connections??[]).map(connection=>({...connection, callable:callableMcpTools(connection.tools??[])})),
           approvals: [...pending.values()], events: state.events.slice().reverse(), reminders: state.reminders ?? [], quiet: !!state.quiet };
       case 'quiet':
         if (typeof data.enabled !== 'boolean') throw Error('invalid');
@@ -297,6 +335,23 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         const r = {id:randomUUID(),...(data.job&&{job:data.job,language:data.language}),draft:data.draft, title:data.title.trim(), next:data.next, daily:data.daily, weekly:!!data.weekly, status:'scheduled'};
         record('reminder','scheduled',r.title,state.paused,{ reminders:[...reminders,r] }); return {id:r.id};
       }
+      case 'browserForm.status': return forms.status();
+      case 'browserForm.open': return queueForm(forms.proposeOpen(data.url));
+      case 'browserForm.action': {
+        const signal = this.begin();
+        if (!signal) throw Error('unavailable');
+        return this.proposeBrowserField({id:data.page,control:data.control,value:data.value},signal).finally(()=>this.end());
+      }
+      case 'browserForm.scan': {
+        const signal = this.begin();
+        if (!signal) throw Error('unavailable');
+        return forms.scan(signal).finally(()=>this.end());
+      }
+      case 'browserForm.close': {
+        if (active) throw Error('unavailable');
+        for (const [id,item] of pending) if (item.tool.startsWith('browserForm.')) pending.delete(id);
+        return forms.close().then(forms.status);
+      }
       case 'browser.propose': {
         if (state.paused || pending.size >= 16) throw Error('unavailable');
         const target = wikiArticle(data.url);
@@ -306,13 +361,15 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         record(item.tool, 'requested', target);
         return { id:item.id };
       }
-      case 'mcp.time': {
+      case 'mcp.time':
+      case 'mcp.call': {
         const c=this.connection(data.id);
-        if(!c.tools.includes('get_current_time') || pending.size>=16 || typeof data.timezone!=='string' || data.timezone.length>80)throw Error('invalid');
-        new Intl.DateTimeFormat('en',{timeZone:data.timezone});
-        const item={id:randomUUID(),connection:c.id,timezone:data.timezone,agent:'Abyssinia AI',tool:'mcp.get_current_time',
-          target:c.url,text:JSON.stringify({timezone:data.timezone}),risk:'read time',expires:now()+120000};
-        pending.set(item.id,item);record(item.tool,'requested',c.url);return {id:item.id};
+        const name=data.action==='mcp.time'?'get_current_time':data.tool;
+        if(!c.tools.includes(name)||pending.size>=16)throw Error('invalid');
+        const args=validateMcpCall(name,data.action==='mcp.time'?{timezone:data.timezone}:data.arguments);
+        const item={id:randomUUID(),connection:c.id,mcpTool:name,mcpArgs:args,agent:'Abyssinia AI',tool:'mcp.'+name,
+          target:c.url,text:JSON.stringify(args),risk:'read-only MCP operation',expires:now()+120000};
+        recordApproval(item,'requested');pending.set(item.id,item);return {id:item.id};
       }
       case 'mcp.add': {
         const list=state.connections??[];
@@ -326,7 +383,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         const list=state.connections??[], c=list.find(x=>x.id===data.id);
         if(!c)throw Error('invalid');
         if(runningConnection===c.id)active?.abort();
-        for(const [id,item] of pending)if(item.connection===c.id){pending.delete(id);record(item.tool,'cancelled',c.url);}
+        for(const [id,item] of pending)if(item.connection===c.id){pending.delete(id);recordApproval(item,'cancelled');}
         const connections=data.action==='mcp.remove'?list.filter(x=>x!==c):list.map(x=>x===c?{...x,enabled:!x.enabled}:x);
         record(data.action,'completed',c.name,state.paused,{connections});return {};
       }
@@ -342,11 +399,13 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         record('reminder',data.action==='removeReminder'?'deleted':status,r.title,state.paused,{reminders,scheduleRuns:scheduleHistory()}); return {};
       }
       case 'pause':
+        void forms.close();
         active?.abort();
         revokeDesktop();
-        for (const item of pending.values()) record(item.tool, 'cancelled', item.target);
+        for (const item of pending.values()) recordApproval(item, 'cancelled');
         grant=undefined;
         repository=undefined;
+        projectWorktree=undefined;
         pending.clear(); record('agent', 'paused', '', true); return {};
       case 'resume':
         record('agent', 'resumed', '', false); return {};
@@ -355,6 +414,20 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       case 'code.repository': {
         const scope = currentRepository(data.repository);
         return { repository: scope.id, ...inspectRepository(scope) };
+      }
+      case 'code.openWorktree':
+      case 'code.backToProject': {
+        const scope = currentRepository(data.repository);
+        if (!projectWorktree) throw Error('unavailable');
+        const open = data.action === 'code.openWorktree';
+        if (open === !!scope.worktree) throw Error('invalid');
+        const next = { ...(open ? projectWorktree.scope : projectWorktree.sourceRepository), id:randomUUID(), worktree:open };
+        const map = inspectRepository(next);
+        revokeEdits();
+        clearProjectApprovals({keepWorktree:true});
+        repository = next;
+        record('code.repository', 'approved', next.root);
+        return { repository:next.id, ...map };
       }
       case 'code.preview':
       case 'code.open': {
@@ -403,6 +476,41 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
           text:files.map(file=>file.path).join('\n'),expires:now()+120000};
         record(item.tool,'requested',item.target);pending.set(item.id,item);return {id:item.id};
       }
+      case 'code.worktree':
+      case 'code.command': {
+        const scope = currentRepository(data.repository);
+        checkRepository(scope);
+        const command = data.action === 'code.command';
+        if (pending.size >= 16 || (!command && active) || (command ? !projectWorktree : scope.worktree || !localTool('git'))) throw Error('unavailable');
+        const config = command ? projectCommandConfig() : undefined;
+        if (command && !config) throw Error('unsupported');
+        const request = command ? projectCommand(data.command, data.args) : undefined;
+        if (command) request.snapshotHash = snapshotWorktree(projectWorktree).hash;
+        const revision = command ? projectWorktree.revision : projectHead(scope);
+        const review = command ? [projectWorktree.path, revision, 'SHA-256 ' + request.snapshotHash,
+          config.image, JSON.stringify([request.command, ...request.args], null, 2)] : [revision];
+        const item = { id:randomUUID(), agent:'AK Code Engine', tool:data.action,
+          risk:command?'offline project container':'create detached worktree', target:scope.root,
+          repository:scope.id, revision, config, request, worktreePath:command?projectWorktree.path:undefined,
+          text:review.join('\n'), expires:now()+120000 };
+        record(item.tool, 'requested', item.target);
+        pending.set(item.id, item);
+        return { id:item.id };
+      }
+      case 'code.worktreeInspect': {
+        const scope = currentRepository(data.repository);
+        const { operation, query } = data;
+        if (pending.size >= 16 || !projectWorktree || !['status','diff','grep'].includes(operation)) throw Error('invalid');
+        if (operation === 'grep' && (typeof query !== 'string' || !query.trim() || query.length > 160 || /[\x00-\x1f\x7f]/u.test(query)))
+          throw Error('invalid');
+        const item = { id:randomUUID(), agent:'AK Code Engine', tool:data.action, risk:'read private worktree',
+          repository:scope.id, operation, query:operation==='grep'?query:undefined,
+          worktreePath:projectWorktree.path, expires:now()+120000, target:projectWorktree.path,
+          text:operation === 'grep' ? ['Literal search',query].join('\n') : 'git '+operation };
+        record(item.tool,'requested',item.target);
+        pending.set(item.id,item);
+        return {id:item.id};
+      }
       case 'code.read':
         if (!grant || state.paused) throw Error('unavailable');
         return {grant:grant.id,target:grant.path,text:readSource()};
@@ -434,11 +542,22 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       case 'approve': {
         const item = pending.get(data.id);
         if (!item || state.paused) throw Error('expired');
-        if(data.action==='approve'&&(item.tool.startsWith('window.')||item.tool==='mcp.get_current_time'||item.tool==='browser.read')&&active)throw Error('unavailable');
-        if(data.action==='approve'&&item.tool==='code.test'&&active)throw Error('unavailable');
+        if(data.action==='approve'&&(item.tool.startsWith('window.')||item.mcpTool||item.tool==='browser.read'||item.tool.startsWith('browserForm.'))&&active)throw Error('unavailable');
+        if(data.action==='approve'&&['code.test','code.worktree','code.command','code.worktreeInspect'].includes(item.tool)&&active)throw Error('unavailable');
         pending.delete(data.id);
-        if (data.action === 'reject') { record(item.tool, 'rejected', item.target); return {}; }
-        record(item.tool, 'approved', item.target);
+        if (data.action === 'reject') { recordApproval(item, 'rejected'); return {}; }
+        recordApproval(item, 'approved');
+        if (item.tool.startsWith('browserForm.')) {
+          const signal = this.begin();
+          return forms.run(item,signal).then(browserForm => {
+            signal.throwIfAborted();
+            record(item.tool,browserForm.last?.applied===false?'failed':'completed',item.logTarget);
+            return { browserForm };
+          }).catch(error=>{
+            record(item.tool,signal.aborted?'interrupted':'failed',item.logTarget);
+            throw error;
+          }).finally(()=>this.end());
+        }
         if(item.tool.startsWith('document.')){
           try{
             if(snapshotFile(item.target,item.fileId).text!==item.before)throw Error('stale');
@@ -461,14 +580,14 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
             throw error;
           }).finally(() => this.end());
         }
-        if(item.tool==='mcp.get_current_time'){
+        if(item.mcpTool){
           const c=this.connection(item.connection);
           const signal=this.begin();
           if(!signal)throw Error('unavailable');
           runningConnection=c.id;
-          return mcpCurrentTime(c.url,item.timezone,signal).then(result=>{
-            signal.throwIfAborted();record(item.tool,'completed',c.url);return result;
-          }).catch(error=>{record(item.tool,'failed',c.url);throw error;}).finally(()=>{runningConnection=undefined;this.end();});
+          return invokeMcpTool(c.url,item.mcpTool,item.mcpArgs,signal).then(result=>{
+            signal.throwIfAborted();recordApproval(item,'completed');return result;
+          }).catch(error=>{recordApproval(item,signal.aborted?'interrupted':'failed');throw error;}).finally(()=>{runningConnection=undefined;this.end();});
         }
         if(item.tool.startsWith('window.')){
           if(!desktopEnabled || (item.parameters && (!controls.has(item.controlGrant)||controls.get(item.controlGrant).expires<=now())))throw Error('expired');
@@ -477,6 +596,27 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
             signal.throwIfAborted();record(item.tool,'completed',item.target);return {};
           }).catch(error=>{record(item.tool,'failed',item.target);throw error})
             .finally(()=>{desktopBusy=false;this.end()});
+        }
+        if (['code.worktree','code.command','code.worktreeInspect'].includes(item.tool)) {
+          const scope = currentRepository(item.repository);
+          const command = item.tool === 'code.command';
+          const inspect = item.tool === 'code.worktreeInspect';
+          checkRepository(scope);
+          if ((command || inspect) && (!projectWorktree || projectWorktree.path !== item.worktreePath ||
+              (command && projectWorktree.revision !== item.revision))) throw Error('stale');
+          const signal = this.begin();
+          runningProject = scope.id;
+          return Promise.resolve().then(() => command ? runProjectCommand(item.config, projectWorktree, item.request, signal) :
+            inspect ? inspectProjectWorktree(projectWorktree, item.operation, item.query, signal) :
+            createProjectWorktree(scope, item.revision, join(realpathSync(directory), 'worktrees'), signal)).then(result => {
+            signal.throwIfAborted();
+            if (!command && !inspect) projectWorktree = { ...result, sourceRepository:scope };
+            record(item.tool, command && result.code !== 0 ? 'failed' : 'completed', item.target);
+            return command || inspect ? { projectCommand:result } : { projectWorktree:worktreeView() };
+          }).catch(error => {
+            record(item.tool, signal.aborted ? 'interrupted' : 'failed', item.target);
+            throw error;
+          }).finally(() => { runningProject=undefined; this.end(); });
         }
         if(item.tool==='code.test'){
           const scope=currentRepository(item.repository);
@@ -497,7 +637,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
             const scope=currentRepository(item.repository);
             const file=readRepositoryFile(scope,item.path);
             if(file.target!==item.target)throw Error('stale');
-            const fileId=replaceReviewed(item.target,item.before,item.text,item.fileId);
+            const fileId=replaceReviewed(item.target,item.before,item.text,item.fileId,scopeSnapshot(scope));
             if(grant?.path===item.target){grant.fileId=fileId;grant.undo={before:item.before,after:item.text};}
             record(item.tool,'updated',item.target);return {};
           }catch(error){record(item.tool,'failed',item.target);throw error;}
@@ -505,8 +645,7 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
         if(item.tool==='code.replace'){
           try {
             if(grant?.id!==item.grant)throw Error('expired');
-            if (grant.repository) checkRepository(grant.repository);
-            grant.fileId=replaceReviewed(item.target,item.before,item.text,grant.fileId);
+            grant.fileId=replaceReviewed(item.target,item.before,item.text,grant.fileId,scopeSnapshot(grant.repository));
           }catch(error){record(item.tool,'failed',item.target);throw error;}
           grant.undo=item.undo?null:{before:item.before,after:item.text};
           record(item.tool,item.undo?'restored':'updated',item.target);return {};

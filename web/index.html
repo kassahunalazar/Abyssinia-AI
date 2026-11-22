@@ -163,6 +163,26 @@
       <div id="browser-result"></div>
       <button id="browser-attach" type="button" disabled>የገጹን ጽሑፍ ወደ ውይይት አያይዝ</button>
     </details>
+    <details id="edge-panel">
+      <summary>በተለየ Edge ውስጥ ቅጽ ሙላ</summary>
+      <form id="edge-open-form">
+        <label>የድረ ገጹ አድራሻ<input id="edge-url" type="url" maxlength="2048" dir="ltr" placeholder="https://example.org/form" required></label>
+        <button id="edge-request-open">ለመክፈት ፈቃድ ጠይቅ</button>
+      </form>
+      <p id="edge-status" role="status"></p>
+      <div id="edge-active" hidden>
+        <p id="edge-page"></p>
+        <button id="edge-scan" type="button">የገጹን መስኮች አድስ</button>
+        <button id="edge-close" type="button">የEdge ክፍለ ጊዜውን ዝጋ</button>
+        <label>የቅጽ መስክ<select id="edge-field"></select></label>
+        <label id="edge-text-label" hidden>የሚገባ ጽሑፍ<textarea id="edge-text" maxlength="1000" rows="3"></textarea></label>
+        <label id="edge-check-label" hidden><input id="edge-checked" type="checkbox" checked>ምልክት አድርግ</label>
+        <label id="edge-choice-label" hidden>የሚመረጠው<select id="edge-choice"></select></label>
+        <p id="edge-endpoint"></p>
+        <button id="edge-request-action" type="button" disabled>ለእርምጃው ፈቃድ ጠይቅ</button>
+        <button id="edge-chat" type="button" disabled>ይህን መስክ ለውይይት ምረጥ</button>
+      </div>
+    </details>
     <div id="sources"></div>
     <h3 id="coding-heading">AK Code Engine · የኮድ ክለሳ</h3>
     <button id="project-picker" type="button">የፕሮጀክት አቃፊ ምረጥ</button>
@@ -182,6 +202,31 @@
       <button id="project-refresh" type="button">ፋይሎችን አድስ</button>
       <button id="project-revoke" type="button">የአቃፊውን ፈቃድ ዝጋ</button>
       <pre id="project-preview" hidden></pre>
+      <details id="project-worktree-panel">
+        <summary>Git worktree እና የፕሮጀክት ትዕዛዝ</summary>
+        <p>የመጨረሻውን commit በተለየ Git worktree ይክፈቱ። ያልተመዘገቡ ለውጦች አይካተቱም።</p>
+        <button id="project-worktree-create" type="button">Git worktree ለመፍጠር ፈቃድ ጠይቅ</button>
+        <p id="project-worktree-status" role="status"></p>
+        <div id="project-worktree-tools" hidden>
+          <button id="project-worktree-open" type="button">የworktree ፋይሎችን ክፈት</button>
+          <button id="project-worktree-back" type="button">ወደ መነሻ አቃፊ ተመለስ</button>
+          <button id="project-worktree-git-status" type="button">Git status ለማየት ፈቃድ ጠይቅ</button>
+          <button id="project-worktree-diff" type="button">Git diff ለማየት ፈቃድ ጠይቅ</button>
+          <button id="worktree-inspect-chat" type="button">worktree በውይይት ገምግም</button>
+          <form id="project-worktree-grep-form">
+            <label>በworktree ፋይሎች ውስጥ ፈልግ<input id="project-worktree-query" required maxlength="160"></label>
+            <button type="submit">ለመፈለግ ፈቃድ ጠይቅ</button>
+          </form>
+        </div>
+        <p id="project-command-status" role="status"></p>
+        <form id="project-command-form" hidden>
+          <button id="worktree-command-chat" type="button">ትዕዛዝ በውይይት አዘጋጅ</button>
+          <label>ፕሮግራም<input id="project-command-name" maxlength="98" placeholder="node" required spellcheck="false"></label>
+          <label>ግቤቶች · አንድ በአንድ መስመር<textarea id="project-command-args" rows="3" maxlength="16384" placeholder="--test" spellcheck="false"></textarea></label>
+          <button id="project-command-ask" type="submit">ለማስኬድ ፈቃድ ጠይቅ</button>
+        </form>
+        <pre id="project-command-output" role="status" hidden></pre>
+      </details>
     </section>
     <section id="code-edit" hidden>
       <p id="code-target"></p>

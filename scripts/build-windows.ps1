@@ -41,6 +41,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0app-$version\scrip
 pause
 "@
 Set-Content -LiteralPath (Join-Path $stage 'Abyssinia AI\Setup Abyssinia Engine.cmd') -Value $setup -Encoding ASCII
+$voiceSetup = @"
+@echo off
+echo This installs the optional noncommercial MMS Amharic voice model and its local dependencies.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0app-$version\scripts\setup-local-voice.ps1"
+pause
+"@
+Set-Content -LiteralPath (Join-Path $stage 'Abyssinia AI\Setup Local Amharic Voice.cmd') -Value $voiceSetup -Encoding ASCII
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $artifact = [IO.Path]::GetFullPath($Destination)
 New-Item ([IO.Path]::GetDirectoryName($artifact)) -ItemType Directory -Force | Out-Null

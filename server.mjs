@@ -11,11 +11,13 @@ import { wikiArticle } from './browser-reader.mjs';
 import { readScreen } from './screen-reader.mjs';
 import { pickSourceFile, checkDraft } from './code-workspace.mjs';
 import { pickRepository as pickRepositoryFolder } from './repository-workspace.mjs';
-import { discoverMcp } from './mcp-connections.mjs';
+import { callableMcpTools, discoverMcp, mcpCapability } from './mcp-connections.mjs';
 import { speechModels, transcribe } from './speech.mjs';
 import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
 import { askGeminiKey } from './gemini-key.mjs';
 import { nativeSkills } from './native-skills.mjs';
+import {localModel, localSpeaker, localVoiceReady, synthesizeLocal} from './local-voice.mjs';
+import {prepareLocalProvider} from './omniroute-local.mjs';
 
 import { wantsReminder, listsReminders, relativeReminder, validateDraft } from './web/reminders.js';
 
@@ -36,16 +38,18 @@ const assets = {
   '/capability-catalog.js': ['capability-catalog.js','text/javascript; charset=utf-8'],
   '/capabilities.js': ['capabilities.js','text/javascript; charset=utf-8'],
   '/browser-reader.js': ['browser-reader.js','text/javascript; charset=utf-8'],
+  '/browser-forms.js': ['browser-forms.js','text/javascript; charset=utf-8'],
   '/fonts/NotoSansEthiopic.ttf': ['fonts/NotoSansEthiopic.ttf','font/ttf'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-export function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta, onSchedule, extension) {
+export async function hermesReply(message, history = [], provider = resolveProvider(), attachment, onRead, signal, onDelta, onSchedule, extension) {
   const { ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE } = process.env;
   const { base: ASSISTANT_MODEL_URL, model: ASSISTANT_MODEL_ID, key } = provider ?? {};
   if (![ASSISTANT_PYTHON, ASSISTANT_HERMES_SOURCE, ASSISTANT_MODEL_URL, ASSISTANT_MODEL_ID].every(Boolean)) {
     throw new Error('Missing Hermes configuration.');
   }
+  await prepareLocalProvider(ASSISTANT_MODEL_URL,signal);
   return new Promise((accept, reject) => {
     const child = spawn(ASSISTANT_PYTHON, ['-I', '-B', resolve(root, 'hermes_worker.py')], {
       cwd: runtime,
@@ -106,8 +110,8 @@ export function hermesReply(message, history = [], provider = resolveProvider(),
 }
 
 export function createAssistant({ reply = hermesReply, stateDirectory = resolve(runtime, 'product'),
-  pickFile = pickSourceFile, pickRepository = pickRepositoryFolder, readArticle } = {}) {
-  const control = workspaceControl(stateDirectory, undefined, undefined, readArticle);
+  pickFile = pickSourceFile, pickRepository = pickRepositoryFolder, readArticle, formOptions } = {}) {
+  const control = workspaceControl(stateDirectory, undefined, undefined, readArticle, formOptions);
   const session = randomUUID();
   const conversations = new Map();
   let sampleTicket;
@@ -155,7 +159,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     }
     let message;
     let conversation;
-    let scoped, skill, target, controlId, codeSnapshot, projectFiles, testingTools, nativeToolset;
+    let scoped, skill, target, controlId, codeSnapshot, projectFiles, testingTools, nativeToolset, mcpTool;
     let provider;
     let attachment;
     try {
@@ -171,7 +175,8 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           try{skillCatalog=await nativeSkills({signal});return json(200,{skills:skillCatalog});}
           catch{return json(503,{error:'skills_unavailable'});}finally{control.end();}
         }
-        if(data?.action==='voice.output')return json(200,{configured:!!voiceKey(),candidates,voices,speechScript,reviewed:control.reviewedVoice});
+        if(data?.action==='voice.output')return json(200,{configured:!!voiceKey(),candidates,voices,speechScript,reviewed:control.reviewedVoice,
+          local:localVoiceReady()?{model:localModel,voice:localSpeaker}:null});
         if(data?.action==='voice.connect'){
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
@@ -192,12 +197,14 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         if(data?.action==='voice.sample'||data?.action==='voice.speak'){
           const sample=data.action==='voice.sample';
           const pair=sample?data:control.reviewedVoice;
-          if(!pair||!voiceKey())return json(409,{error:'unavailable'});
+          const local=pair?.model===localModel;
+          if(!pair||(local?pair.voice!==localSpeaker||!localVoiceReady():!voiceKey()))return json(409,{error:'unavailable'});
           const signal=control.begin();
           if(!signal)return json(409,{error:'unavailable'});
           res.once('close',()=>{if(!res.writableEnded)control.cancel(signal);});
           try{
-            const audio=await synthesize(sample?speechScript:data.text,pair.model,pair.voice,signal,voiceKey());
+            const spoken=sample?speechScript:data.text;
+            const audio=local?await synthesizeLocal(spoken,signal):await synthesize(spoken,pair.model,pair.voice,signal,voiceKey());
             signal.throwIfAborted();control.record(data.action,'completed',pair.model+'/'+pair.voice);
             if(sample)sampleTicket={id:randomUUID(),model:pair.model,voice:pair.voice,expires:Date.now()+600000};
             return json(200,{audio,...(sample&&{ticket:sampleTicket.id})});
@@ -243,7 +250,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         }
         if(['code.projectSnapshot','code.projectPropose'].includes(data?.action))return json(400,{error:'scope'});
         try { return json(200, await control.execute(data)); }
-        catch (error) { return json(409, { error: ['invalid','expired','stale','write_failed'].includes(error.message) ? error.message : 'unavailable' }); }
+        catch (error) { return json(409, { error: ['invalid','expired','stale','write_failed','unsupported'].includes(error.message) ? error.message : 'unavailable' }); }
       }
       if (searching || capturing || hearing) {
         if (control.paused) return json(423,{error:'paused'});
@@ -282,9 +289,25 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
         if(name==='browser') {
           try { target = wikiArticle(target); } catch { return json(400,{error:'scope'}); }
         } else if(!['research','specialist'].includes(name) && (typeof target!=='string' || target.length>64))return json(400,{error:'scope'});
-        if(name==='desktopControl'){
+        if(name==='mcp'||name==='clock'){
+          mcpTool=name==='clock'?'get_current_time':data.scope.tool;
+          try{
+            const connection=control.connection(target);
+            if(!callableMcpTools(connection.tools??[]).some(tool=>tool.name===mcpTool))throw Error('scope');
+          }catch{return json(409,{error:'scope_unavailable'});}
+          nativeToolset=undefined;
+        }
+        if(name==='desktopControl'||name==='browserForm'){
           controlId=data.scope.control;
           if(typeof controlId!=='string'||controlId.length>64)return json(400,{error:'scope'});
+          if(name==='browserForm') {
+            try { control.selectBrowserField(target,controlId); } catch { return json(409,{error:'scope_unavailable'}); }
+          }
+        }
+        if(name==='worktreeInspect'||name==='projectCommand'){
+          const state=control.execute({action:'status'});
+          if(state.repository!==target||!state.projectWorktree||(name==='projectCommand'&&!state.projectCommandImage))
+            return json(409,{error:'scope_unavailable'});
         }
         if(name==='project'){
           try{projectFiles=control.execute({action:'code.projectSnapshot',repository:target,paths:data.scope.paths});}
@@ -340,7 +363,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       }else if(!draft){
         answer=await reply(message,prior?.turns??[],provider,attachment,()=>{read=true;},signal,scheduling||scoped?undefined:onDelta,
           scheduling?candidate=>{draft=validateDraft(candidate,Date.now());}:undefined,
-          {skill,nativeToolset,onActivity,capability:testingTools?providerProbe:scoped?capabilities[scoped]:undefined,onAction:args=>{proposal=args;}});
+          {skill,nativeToolset,onActivity,capability:testingTools?providerProbe:scoped==='mcp'?mcpCapability(mcpTool):scoped?capabilities[scoped]:undefined,onAction:args=>{proposal=args;}});
       }
       if(scoped){
         signal.throwIfAborted();
@@ -360,7 +383,11 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           answer=sources.length?'የተገኙ ምንጮች።':'ምንጭ አልተገኘም።';
         }else{
           try{
-            if(scoped==='project'){
+            if(scoped==='worktreeInspect'){
+              approval=control.execute({action:'code.worktreeInspect',repository:target,operation:proposal.operation,query:proposal.query});
+            }else if(scoped==='projectCommand'){
+              approval=control.execute({action:'code.command',repository:target,command:proposal.command,args:proposal.args});
+            }else if(scoped==='project'){
               if(!read||!Array.isArray(proposal.edits))return json(422,{error:'scope_unavailable'});
               const edits=proposal.edits.map(({path,text})=>{
                 const file=projectFiles.find(item=>item.path===path);
@@ -380,11 +407,15 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
             }else if(scoped==='browser'){
               if(proposal.read!==true || Object.keys(proposal).length!==1)return json(422,{error:'scope_unavailable'});
               approval=control.execute({action:'browser.propose',url:target});
+            }else if(scoped==='browserForm'){
+              if(typeof proposal.value!=='string'||Object.keys(proposal).length!==1)return json(422,{error:'scope_unavailable'});
+              approval=await control.proposeBrowserField({id:target,control:controlId,value:proposal.value},signal);
             }else if(scoped==='desktop'||scoped==='desktopControl'){
               const allowed=scoped==='desktop'?['focus','scrollUp','scrollDown']:['invoke','setText'];
               if(!allowed.includes(proposal.operation))return json(422,{error:'scope_unavailable'});
               approval=control.execute({action:'desktop.propose',window:target,operation:proposal.operation,control:controlId,text:proposal.text});
-            }else approval=control.execute({action:'mcp.time',id:target,timezone:proposal.timezone});
+            }else if(scoped==='clock')approval=control.execute({action:'mcp.time',id:target,timezone:proposal.timezone});
+            else approval=control.execute({action:'mcp.call',id:target,tool:mcpTool,arguments:proposal});
           }catch{return json(409,{error:'scope_unavailable'});}
           answer='እርምጃውን እንዲፈጽም በፈቃድ ጥያቄዎች ውስጥ ይገምግሙ።';
         }
@@ -423,7 +454,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
     void control.tick(referenceSearch).catch(()=>console.error('Reminder storage unavailable.'));
   }, 5000);
   timer.unref();
-  server.once('close', () => clearInterval(timer));
+  server.once('close', () => { clearInterval(timer); void control.closeBrowser(); });
   return server;
 }
 

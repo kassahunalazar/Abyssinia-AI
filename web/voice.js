@@ -9,6 +9,7 @@ const status = field('tts-status');
 const lesson = field('tts-rating');
 let recording, capture, speech, audioUrl, ticket;
 let modelReady = false, approved = false, narration = false;
+let outputSettings;
 
 function saved(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -56,14 +57,22 @@ async function loadSettings() {
   modelReady = input.models.length > 0;
   choices(model,input.models,saved('abyssinia-stt'));
   if (!modelReady) model.add(new Option('ሞዴል አልተጫነም',''));
-  approved = Boolean(output.reviewed && output.configured);
+  outputSettings = output;
+  approved = Boolean(output.reviewed && (output.reviewed.model===output.local?.model || (output.configured && output.candidates.includes(output.reviewed.model))));
   if (!approved) setNarration(false);
-  choices(field('tts-model'),output.candidates,output.reviewed?.model);
-  choices(field('tts-voice'),output.voices,output.reviewed?.voice);
+  choices(field('tts-model'),[...(output.local?[output.local.model]:[]),...output.candidates],output.reviewed?.model);
+  updateVoiceChoices(output.reviewed?.voice);
   field('tts-script').textContent = output.speechScript;
-  field('tts-sample').disabled = !output.configured;
   field('tts-disable').hidden = !output.reviewed;
-  status.textContent = !output.configured?'Gemini ያገናኙ።':approved?'የተመረጠ ድምፅ · '+output.reviewed.voice:'ድምፅ ይምረጡ፣ ያዳምጡና ይገምግሙ።';
+  if(approved)status.textContent='የተመረጠ ድምፅ · '+output.reviewed.voice;
+}
+function updateVoiceChoices(selected){
+  const local=outputSettings.local && field('tts-model').value===outputSettings.local.model;
+  const options=local?[outputSettings.local.voice]:outputSettings.voices;
+  field('tts-voice').replaceChildren(...options.map(value=>new Option(value,value)));
+  if(options.includes(selected))field('tts-voice').value=selected;
+  field('tts-sample').disabled=!local&&!outputSettings.configured;
+  status.textContent=local?'በዚህ ኮምፒውተር · MMS Amharic · CC BY-NC 4.0':outputSettings.configured?'ድምፅ ይምረጡ፣ ያዳምጡና ይገምግሙ።':'Gemini ያገናኙ።';
 }
 model.onchange = () => save('abyssinia-stt',model.value);
 if (saved('abyssinia-speed')) speed.value = saved('abyssinia-speed');
@@ -222,7 +231,8 @@ field('tts-sample').onclick = async () => {
   finally { sample.disabled=false; }
 };
 player.onended = () => { if(ticket) lesson.hidden=false; };
-field('tts-model').onchange = field('tts-voice').onchange = stopSpeech;
+field('tts-model').onchange = ()=>{stopSpeech();if(outputSettings)updateVoiceChoices();};
+field('tts-voice').onchange = stopSpeech;
 lesson.onsubmit = async event => {
   event.preventDefault();
   try {
