@@ -25,19 +25,19 @@ export function snapshotFile(path, identity) {
   return {text, mode:stat.mode, fileId};
 }
 
-export function replaceReviewed(path, before, after, identity) {
+export function replaceReviewed(path, before, after, identity, snapshot = snapshotFile) {
   if (typeof after !== 'string' || after.includes('\0') || Buffer.byteLength(after)>limit || before===after) throw Error('invalid');
-  const original=snapshotFile(path, identity);
+  const original=snapshot(path, identity);
   if (original.text !== before) throw Error('stale');
   const temp=join(dirname(path),'.abyssinia-'+randomUUID()+'.tmp');
   const fd=openSync(temp,'wx',original.mode);
   let replaced=false;
   try {
     try {writeFileSync(fd,after,'utf8'); fsyncSync(fd);} finally {closeSync(fd);}
-    if (snapshotFile(path, original.fileId).text!==before) throw Error('stale');
+    if (snapshot(path, original.fileId).text!==before) throw Error('stale');
     renameSync(temp,path);
     replaced=true;
-    return snapshotFile(path).fileId;
+    return snapshot(path).fileId;
   } finally {if(!replaced)unlinkSync(temp);}
 }
 

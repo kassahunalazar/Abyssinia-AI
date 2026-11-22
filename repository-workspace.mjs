@@ -58,6 +58,14 @@ export function grantRepository(path, protectedDirectory) {
   return Object.freeze({ root, fileId: fileId(stat), protectedDirectory });
 }
 
+// This entry point is for application-created worktrees in protected storage.
+export function bindProjectWorktree(path, storage) {
+  if (path === storage || !inside(storage, path)) throw Error('invalid');
+  const stat = realStat(path);
+  if (!stat.isDirectory()) throw Error('invalid');
+  return Object.freeze({ root: path, fileId: fileId(stat) });
+}
+
 export function checkRepository(repository) {
   try {
     const stat = realStat(repository.root);
@@ -181,7 +189,7 @@ function readText(repository, target, limit) {
     } catch {
       throw Error('invalid');
     }
-    return { size, text, fileId: fileId(opened) };
+    return { size, text, fileId: fileId(opened), mode: Number(opened.mode) };
   } finally {
     closeSync(fd);
   }
