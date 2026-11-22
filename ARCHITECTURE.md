@@ -45,3 +45,9 @@ The gateway grants a native-picked project directory for bounded reads. A chat e
 The JavaScript test worker loads selected module snapshots and a small synchronous test API in QuickJS WebAssembly. Project code receives no host functions for filesystem, network or process access. The child has a wall-clock timeout, an interruptible guest heap and a bounded reply. The application displays the results and records the outcome. Git worktrees and general-purpose package scripts remain outside this execution adapter.
 
 Confirmed memories and the most recent 100 schedule runs use the local state store. Memory enters model context through an explicit user action. The stock Hermes skill catalog is read from the pinned engine source using its platform filter and metadata parser. Selecting a skill loads its bounded instructions into the next scoped turn. Native desktop controls, article reads and test runs use the approval inbox.
+
+## November 22 execution interfaces
+
+Hermes can request Git inspection and offline project commands from the coding workspace. The gateway binds each proposal to the granted repository and private committed worktree. Git operations run with private configuration. Optional Docker commands receive a snapshot of tracked worktree content, including approved edits. Approval revalidates that snapshot. The container is disposable, so its file changes do not propagate into the worktree.
+
+Selected MCP clock and arithmetic tools use typed gateway schemas and exact single-use approvals. The Edge form reader fetches public HTML through the gateway and renders it in a disposable browser profile with page scripts disabled. The gateway rechecks the form before submission. Local MMS and remote Gemini share the voice evaluation and playback controls.

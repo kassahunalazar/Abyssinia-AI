@@ -152,3 +152,21 @@ A live OmniRoute/Hermes coding task subsequently read two granted JavaScript fil
 The Windows worktree and Edge form integration tests passed. The worktree test created and edited a private checkout and inspected its diff. The browser test submitted approved Amharic form data. The MCP suite exercised the installed Hermes harness and a real loopback MCP SDK server with a deterministic tool-calling model fixture.
 
 A fresh authenticated gateway generated an 8.216-second, mono 16 kHz PCM WAV with the optional MMS model and both cloud keys unset. Edge played the entire sample. Unauthenticated access returned 401 and unreviewed narration returned 409. No listener rating was submitted. In a separate speech round trip the recognizer transcribed the English word “update” as “ጉዳት”. This leaves naturalness and mixed-language quality open.
+
+**IMPLEMENTED** — Scoped MCP calls, private Git worktree editing and inspection, optional offline project commands, approved Edge forms and local Amharic voice evaluation.
+
+**TESTED** — Ran the complete Node test suite with the installed Hermes engine. Also tested live OmniRoute, Edge playback and the extracted Windows package on this machine.
+
+**PASS** — 58 passed, zero failed, zero skipped. A live Amharic task read two granted files and fixed a failing test after approval. A second live chat requested Git status on a private worktree, followed by approval and a successful Git exit. The extracted package served the app and loaded 39 installed skills. CI ran approved-snapshot command execution inside a real Linux Docker container.
+
+**FAIL** — The speech round trip did not preserve the mixed-language reference exactly.
+
+**BLOCKED** — No qualifying native-speaker evaluation for the local voice. Production narration remains gated for that pair.
+
+**NOT RUN** — Live Gemini synthesis in this release, and local Docker execution on this Windows installation.
+
+**KNOWN LIMITATIONS** — Installed skill discovery exceeds the number of connected tool implementations. Browser forms support standard public HTML. Windows computer control requires a selected accessible window or control. Schedules require an active gateway.
+
+**NEXT STEP** — Qualify a voice with native listeners before enabling it for narration by default.
+
+The published Windows ZIP installed successfully on a fresh Windows Server 2022 runner. The installed Hermes passed the Amharic integration and skill catalog checks. The package also rendered in Edge at 1440 and 390 pixels with no uncaught page errors or horizontal overflow. [Windows installation and Docker verification](https://github.com/kassahunalazar/amharic-hermes/actions/runs/44973110564)

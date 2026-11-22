@@ -8,7 +8,7 @@ Double-click **Abyssinia AI.cmd**, then open **http://127.0.0.1:8789**. Keep the
 
 Open **የሥራ ቦታ** for source lookup, project file review, local notes, reminders, screen reading, approvals and activity. To create a document, select **በፋይል አስቀምጥ** beneath an answer, edit the name and contents, then approve the exact write. Files are created in the application data folder shown in the approval. Pause interrupts active model or OCR work and suspends reminder delivery. Resume re-enables new work.
 
-Reminders appear inside the app. The gateway must be running for scheduled delivery. Quiet hours use Windows local time. Screen reading uses a single user-selected capture and the installed Windows OCR languages. Review the extracted text before attaching it to a conversation. Local dictation uses installed speech weights. Reply narration requires a configured Gemini credential and a reviewed voice.
+Reminders appear inside the app. The gateway must be running for scheduled delivery. Quiet hours use Windows local time. Screen reading uses a single user-selected capture and the installed Windows OCR languages. Review the extracted text before attaching it to a conversation. Local dictation uses installed speech weights. Reply narration requires a qualifying review of the selected voice. Gemini requires a backend credential. The optional local MMS model runs without a cloud key.
 
 ## Manual Windows setup
 
