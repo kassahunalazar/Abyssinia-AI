@@ -1,16 +1,27 @@
+import { providerCatalog } from './provider-catalog.js';
 const $ = id => document.getElementById(id);
 const defaults = { omniroute: 'kc/openrouter/free', ollama: '', custom: '' };
 let selected = { kind: 'startup' };
 try { selected = JSON.parse(localStorage.getItem('abyssinia-provider')) ?? selected; } catch {}
 export const currentProvider = () => ({ ...selected });
-export const providerLabel = p => ({ omniroute: 'OmniRoute', ollama: 'Ollama', custom: 'Custom', startup: 'Server default', none: 'No provider' }[p.kind] + (p.model ? ' · ' + p.model : ''));
+export const providerLabel = p => ((providerCatalog[p.kind]?.label ?? { custom: 'Custom', startup: 'Server default', none: 'No provider' }[p.kind] ?? 'Provider') + (p.model ? ' · ' + p.model : ''));
 
+for (const [id, provider] of Object.entries(providerCatalog)) {
+  $('known-providers').append(new Option(provider.label, id));
+}
 const kind = $('provider-kind');
 const model = $('provider-model');
 const url = $('provider-url');
 const result = $('provider-result');
 function fields() {
-  const needsModel = Object.hasOwn(defaults, kind.value);
+  $('router-models').hidden = kind.value !== 'omniroute';
+  if (kind.value === 'omniroute') model.setAttribute('list','router-model-list');
+  else model.removeAttribute('list');
+  const preset = providerCatalog[kind.value];
+  const needsModel = Boolean(preset) || kind.value === 'custom';
+  const help = $('provider-help');
+  help.hidden = !preset;
+  help.textContent = preset ? [preset.base, preset.keys.length ? 'Server .env · ' + preset.keys.join(' / ') : 'Local endpoint'].join(' · ') : '';
   $('url-field').hidden = kind.value !== 'custom';
   $('model-field').hidden = !needsModel;
   model.required = needsModel;
@@ -63,3 +74,21 @@ async function testProvider(mode) {
 }
 $('provider-test').onclick = () => testProvider('chat');
 $('provider-test-tools').onclick = () => testProvider('tools');
+
+$('router-models').onclick = async () => {
+  const button = $('router-models');
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'provider.routerModels'})});
+    if (!response.ok) throw Error();
+    const {models} = await response.json();
+    $('router-model-list').replaceChildren(...models.map(id=>new Option(id,id)));
+    if (kind.value === 'omniroute') {
+      result.textContent = models.length + ' ሞዴሎች · Enter or select a model ID.';
+      model.focus();
+    }
+  } catch {
+    if (kind.value === 'omniroute') result.textContent = 'OmniRoute catalog unavailable. Enter a model ID manually.';
+  } finally { button.disabled = false; }
+};

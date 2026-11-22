@@ -126,6 +126,7 @@ def main():
 
         agent = AIAgent(
             provider="custom",
+            api_mode=os.environ.get("ASSISTANT_API_MODE"),
             base_url=os.environ["ASSISTANT_MODEL_URL"],
             api_key=os.environ.get("ASSISTANT_MODEL_KEY", "local-model"),
             model=os.environ["ASSISTANT_MODEL_ID"],

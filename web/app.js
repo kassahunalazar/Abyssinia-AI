@@ -1,6 +1,5 @@
 import {selectedCapability,selectCapability} from './capabilities.js';
 import {listsReminders,relativeReminder} from './reminders.js';
-import { narrateReply } from './voice.js';
 import { currentProvider, providerLabel } from './settings.js';
 import { proposeDocument, paused } from './controls.js';
 const form = document.querySelector('#composer');
@@ -229,7 +228,6 @@ form.addEventListener('submit', async event => {
     chat.conversation = conversation;
     selectCapability({});
     saveChats();
-    if (active===chat) void narrateReply(reply);
   } catch (error) {
     chat.error = error.message === 'attachment_unread' ? 'ሞዴሉ አባሪውን አላነበበም። መሣሪያ መጠቀም የሚችል ሞዴል ይምረጡ።' : error.message === 'paused' ? 'ሥራው ቆሟል። ለመቀጠል አጋዡን ያስጀምሩ።' : error.message === 'expired'
       ? 'ይህን ውይይት መቀጠል አይቻልም። እባክዎ አዲስ ውይይት ይጀምሩ።'

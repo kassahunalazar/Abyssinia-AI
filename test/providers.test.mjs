@@ -15,6 +15,16 @@ test('credentials stay bound to their configured endpoint', () => {
   assert.throws(() => resolveProvider({kind:'custom', url:'http://two.example/v1', model:'x'}, env));
 });
 
+test('presets bind transport and backend credentials to the selected service', () => {
+  const env = { ANTHROPIC_API_KEY:'anthropic-fixture', GROQ_API_KEY:'groq-fixture' };
+  const anthropic = resolveProvider({kind:'anthropic',url:'https://other.example',model:'test'},env);
+  assert.equal(anthropic.base,'https://api.anthropic.com');
+  assert.equal(anthropic.mode,'anthropic_messages');
+  assert.equal(anthropic.key,env.ANTHROPIC_API_KEY);
+  assert.equal(resolveProvider({kind:'groq',model:'test'},env).key,env.GROQ_API_KEY);
+  assert.equal(resolveProvider({kind:'custom',url:'https://other.example',model:'test'},env).key,undefined);
+});
+
 test('custom endpoint through Hermes, scoped read, chat isolation and no-provider mode', { skip: !process.env.ASSISTANT_PYTHON || !process.env.ASSISTANT_HERMES_SOURCE }, async t => {
   const requests = [];
   const endpoint = createServer(async (req, res) => {

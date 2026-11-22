@@ -174,3 +174,9 @@ The published Windows ZIP installed successfully on a fresh Windows Server 2022 
 ## Local typography verification
 
 On November 22, 2026, Edge reported actual rendered glyphs from Ethiopia Jiret for body copy, Ethiopic Yigezu Bisrat Gothic for the wordmark, and Waldba Fantuwua for the welcome and card titles. The installed files matched the three supplied TTF files by SHA-256. The page fit both 1440 and 390 pixel viewports. The full Windows suite with installed Hermes passed 57 of 58 tests, including the real Hermes integration. The Edge form test initially returned HTTP 409 and passed on a separate rerun (2 of 2 browser form tests passed).
+
+## Dictation-only composer and provider settings
+
+Edge recorded a supplied Amharic audio file through its microphone test device and the actual local recognizer inserted 51 characters into the editable draft. The composer contained a microphone and Settings had no Voice panel. Edge displayed 47 named provider presets and loaded 1,011 model IDs from the running local OmniRoute catalog. This verifies discovery. Live chat and tool probes both succeeded through installed Hermes and the selected OmniRoute model. Other named services have not all been credential-tested.
+
+The full Windows Node suite passed 58 of 59 tests with installed Hermes, including the Amharic round trip and provider credential isolation. The Edge form approval initially returned HTTP 409. Both browser form tests passed on a separate rerun.

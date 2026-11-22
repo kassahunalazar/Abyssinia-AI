@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { basename, resolve } from 'node:path';
-import { resolveProvider } from './providers.mjs';
+import { resolveProvider, localRouterModels } from './providers.mjs';
 import { workspaceControl } from './workspace-control.mjs';
 import { referenceSearch } from './reference-search.mjs';
 import { wikiArticle } from './browser-reader.mjs';
@@ -32,6 +32,7 @@ const assets = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/reminders.js': ['reminders.js','text/javascript; charset=utf-8'],
   '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
+  '/provider-catalog.js': ['provider-catalog.js', 'text/javascript; charset=utf-8'],
   '/settings.js': ['settings.js', 'text/javascript; charset=utf-8'],
   '/controls.js': ['controls.js', 'text/javascript; charset=utf-8'],
   '/voice.js': ['voice.js','text/javascript; charset=utf-8'],
@@ -67,6 +68,7 @@ export async function hermesReply(message, history = [], provider = resolveProvi
         ASSISTANT_MODEL_URL,
         ASSISTANT_MODEL_ID,
         ASSISTANT_MODEL_KEY: key,
+        ASSISTANT_API_MODE: provider?.mode,
       },
       windowsHide: true,
       signal,
@@ -167,6 +169,15 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
       for await (const chunk of req) chunks.push(chunk);
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       if (managing) {
+        if(data?.action==='provider.routerModels'){
+          const signal=control.begin();
+          if(!signal)return json(409,{error:'unavailable'});
+          try{
+            await prepareLocalProvider('http://127.0.0.1:20128/v1',signal);
+            return json(200,{models:await localRouterModels(signal)});
+          }catch{return json(502,{error:'catalog_unavailable'})}
+          finally{control.end()}
+        }
         if(data?.action==='skills.native'){
           if(control.paused)return json(423,{error:'paused'});
           if(skillCatalog)return json(200,{skills:skillCatalog});
