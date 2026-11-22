@@ -13,10 +13,7 @@ import { pickSourceFile, checkDraft } from './code-workspace.mjs';
 import { pickRepository as pickRepositoryFolder } from './repository-workspace.mjs';
 import { callableMcpTools, discoverMcp, mcpCapability } from './mcp-connections.mjs';
 import { speechModels, transcribe } from './speech.mjs';
-import { candidates, voices, speechScript, synthesize } from './speech-output.mjs';
-import { askGeminiKey } from './gemini-key.mjs';
 import { nativeSkills } from './native-skills.mjs';
-import {localModel, localSpeaker, localVoiceReady, synthesizeLocal} from './local-voice.mjs';
 import {prepareLocalProvider} from './omniroute-local.mjs';
 
 import { wantsReminder, listsReminders, relativeReminder, validateDraft } from './web/reminders.js';
@@ -116,10 +113,7 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
   const control = workspaceControl(stateDirectory, undefined, undefined, readArticle, formOptions);
   const session = randomUUID();
   const conversations = new Map();
-  let sampleTicket;
   let skillCatalog;
-  let sessionVoiceKey;
-  const voiceKey=()=>sessionVoiceKey || process.env.ABYSSINIA_TTS_KEY || process.env.GEMINI_API_KEY;
   const server = createServer({ requestTimeout: 10000, headersTimeout: 5000 }, async (req, res) => {
     const authority = loopback + ':' + server.address().port;
     res.setHeader('Cache-Control', 'no-store');
@@ -185,42 +179,6 @@ export function createAssistant({ reply = hermesReply, stateDirectory = resolve(
           if(!signal)return json(409,{error:'busy'});
           try{skillCatalog=await nativeSkills({signal});return json(200,{skills:skillCatalog});}
           catch{return json(503,{error:'skills_unavailable'});}finally{control.end();}
-        }
-        if(data?.action==='voice.output')return json(200,{configured:!!voiceKey(),candidates,voices,speechScript,reviewed:control.reviewedVoice,
-          local:localVoiceReady()?{model:localModel,voice:localSpeaker}:null});
-        if(data?.action==='voice.connect'){
-          const signal=control.begin();
-          if(!signal)return json(409,{error:'unavailable'});
-          try{
-            const key=await askGeminiKey(signal);
-            signal.throwIfAborted();
-            if(key){sessionVoiceKey=key;sampleTicket=null;control.record('voice.connect','completed','Gemini');}
-            return json(200,{configured:!!voiceKey()});
-          }catch{return json(409,{error:'unavailable'})}finally{control.end()}
-        }
-        if(data?.action==='voice.rate'){
-          if(!sampleTicket||data.ticket!==sampleTicket.id||sampleTicket.expires<Date.now()||data.native!==true)return json(409,{error:'review'});
-          try{
-            const result=control.reviewVoice(sampleTicket.model,sampleTicket.voice,data.naturalness,data.clarity);
-            sampleTicket=null;return json(200,result);
-          }catch{return json(409,{error:'review'})}
-        }
-        if(data?.action==='voice.sample'||data?.action==='voice.speak'){
-          const sample=data.action==='voice.sample';
-          const pair=sample?data:control.reviewedVoice;
-          const local=pair?.model===localModel;
-          if(!pair||(local?pair.voice!==localSpeaker||!localVoiceReady():!voiceKey()))return json(409,{error:'unavailable'});
-          const signal=control.begin();
-          if(!signal)return json(409,{error:'unavailable'});
-          res.once('close',()=>{if(!res.writableEnded)control.cancel(signal);});
-          try{
-            const spoken=sample?speechScript:data.text;
-            const audio=local?await synthesizeLocal(spoken,signal):await synthesize(spoken,pair.model,pair.voice,signal,voiceKey());
-            signal.throwIfAborted();control.record(data.action,'completed',pair.model+'/'+pair.voice);
-            if(sample)sampleTicket={id:randomUUID(),model:pair.model,voice:pair.voice,expires:Date.now()+600000};
-            return json(200,{audio,...(sample&&{ticket:sampleTicket.id})});
-          }catch{return json(502,{error:'speech'})}
-          finally{control.end()}
         }
         if(data?.action==='voice.models')return json(200,{models:speechModels()});
         if(data?.action==='mcp.check'){

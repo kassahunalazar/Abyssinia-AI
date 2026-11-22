@@ -34,7 +34,7 @@ AK Code Engine will use T3 Code's thread-to-worktree and diff-review workflow as
 Voice selection requires a shared Amharic STT/TTS script and native-speaker evaluation. Keep the existing exclusion policy in SECURITY.md in force at provider registration, selection and fallback.
 ## November 21 implementation
 
-The gateway can stream Hermes text deltas as NDJSON and preserves JSON responses for existing callers. AK Code Engine holds one revocable native file-picker grant per gateway. Source editing, rollback and Windows window control use the approval inbox. MCP discovery negotiates a loopback HTTP session, requests tool metadata and closes the session. The speech pipeline runs a bounded local transcription subprocess; voice playback uses a separate backend adapter and a native-listener review for the exact model and voice.
+The gateway can stream Hermes text deltas as NDJSON and preserves JSON responses for existing callers. AK Code Engine holds one revocable native file-picker grant per gateway. Source editing, rollback and Windows window control use the approval inbox. MCP discovery negotiates a loopback HTTP session, requests tool metadata and closes the session. The speech pipeline runs a bounded local transcription subprocess for dictation.
 
 Directory-wide edits, Git worktrees, arbitrary project test execution, model-directed MCP calls, and browser form automation still require integrations. The local package includes Node and depends on the installed Hermes environment.
 
@@ -50,4 +50,4 @@ Confirmed memories and the most recent 100 schedule runs use the local state sto
 
 Hermes can request Git inspection and offline project commands from the coding workspace. The gateway binds each proposal to the granted repository and private committed worktree. Git operations run with private configuration. Optional Docker commands receive a snapshot of tracked worktree content, including approved edits. Approval revalidates that snapshot. The container is disposable, so its file changes do not propagate into the worktree.
 
-Selected MCP clock and arithmetic tools use typed gateway schemas and exact single-use approvals. The Edge form reader fetches public HTML through the gateway and renders it in a disposable browser profile with page scripts disabled. The gateway rechecks the form before submission. Local MMS and remote Gemini share the voice evaluation and playback controls.
+Selected MCP clock and arithmetic tools use typed gateway schemas and exact single-use approvals. The Edge form reader fetches public HTML through the gateway and renders it in a disposable browser profile with page scripts disabled. The gateway rechecks the form before submission.

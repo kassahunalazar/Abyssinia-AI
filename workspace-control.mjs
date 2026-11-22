@@ -141,15 +141,6 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
     end() { active = undefined; },
     cancel(signal) { if(active?.signal===signal) active.abort(); },
     record,
-    get reviewedVoice(){return state.reviewedVoice??null;},
-    reviewVoice(model,voice,naturalness,clarity) {
-      if(state.paused||![naturalness,clarity].every(n=>Number.isInteger(n)&&n>=1&&n<=5))throw Error('invalid');
-      const accepted=Math.min(naturalness,clarity)>=4;
-      const review={model,voice,naturalness,clarity,reviewed:now()};
-      const reviewedVoice=accepted?review:state.reviewedVoice?.model===model&&state.reviewedVoice?.voice===voice?null:state.reviewedVoice??null;
-      record('voice.review',accepted?'approved':'rejected',model+'/'+voice,state.paused,{reviewedVoice,lastVoiceReview:review});
-      return {accepted};
-    },
     connection(id) {
       const c=state.connections?.find(c=>c.id===id);
       if(!c?.enabled||state.paused)throw Error('unavailable');
@@ -278,8 +269,6 @@ export function workspaceControl(directory, now = Date.now, desktop = windowActi
       case 'quiet':
         if (typeof data.enabled !== 'boolean') throw Error('invalid');
         record('quiet_hours', data.enabled ? 'enabled' : 'disabled', '', state.paused, { quiet: data.enabled }); return {};
-      case 'voice.disable':
-        record('voice','disabled','',state.paused,{reviewedVoice:null});return {};
       case 'desktop.enable':
         if(state.paused)throw Error('unavailable');
         desktopEnabled=true;record('desktop','enabled');return {};
