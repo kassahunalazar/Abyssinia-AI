@@ -1,0 +1,36 @@
+name: Stage GitHub release
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful Build downloadable apps run ID
+        required: true
+      tag:
+        description: New semantic version tag, for example v0.1.0
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Attach verified installers to a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN: ${{ inputs.build_run }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          data="$(gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN")"
+          jq -e --arg repo "$GH_REPO" '.head_branch == "main" and .head_repository.full_name == $repo and .path == ".github/workflows/downloads.yml" and .conclusion == "success"' <<<"$data" >/dev/null
+          sha="$(jq -r '.head_sha' <<<"$data")"
+          gh run download "$BUILD_RUN" -n windows-download -D packages
+          gh run download "$BUILD_RUN" -n android-download -D packages
+          cd packages
+          sha256sum Abyssinia-AI-Setup.exe Abyssinia-AI.apk > SHA256SUMS.txt
+          gh release create "$TAG" --draft --target "$sha" --title "Abyssinia AI $TAG" --notes "Amharic-first assistant by A-K-E-T-O-A-I. Windows x64 includes a local Hermes workspace. Android 8+ includes standalone provider-backed chat. See the README for first-run setup and the edition comparison." Abyssinia-AI-Setup.exe Abyssinia-AI.apk SHA256SUMS.txt
