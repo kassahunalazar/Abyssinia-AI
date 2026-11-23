@@ -7,6 +7,9 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Abyssinia AI Setup")]
 [assembly: AssemblyProduct("Abyssinia AI")]
+[assembly: AssemblyCompany("A-K-E-T-O-A-I")]
+[assembly: AssemblyCopyright("Copyright 2026 A-K-E-T-O-A-I")]
+[assembly: AssemblyVersion("0.1.0.0")]
 
 internal static class Setup {
     [STAThread]

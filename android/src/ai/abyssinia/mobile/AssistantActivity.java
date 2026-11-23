@@ -120,6 +120,7 @@ public final class AssistantActivity extends Activity {
         return new URL(base+"/chat/completions");
     }
     private void dictate(){
+        if(busy)return;
         Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"am-ET");
@@ -183,5 +184,5 @@ public final class AssistantActivity extends Activity {
         }finally{c.disconnect();connection=null;}
     }
     @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);b.putString("draft",draft.getText().toString());}
-    @Override protected void onDestroy(){if(connection!=null)connection.disconnect();worker.shutdownNow();key="";super.onDestroy();}
+    @Override protected void onDestroy(){HttpURLConnection active=connection;if(active!=null)active.disconnect();worker.shutdownNow();key="";super.onDestroy();}
 }
