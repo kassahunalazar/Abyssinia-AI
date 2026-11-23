@@ -58,9 +58,12 @@ jobs:
         run: |
           set -eu
           sudo chmod a+rw /dev/kvm
-          avdmanager create avd --force -n phone -k 'system-images;android-35;google_apis;x86_64' <<<no
-          sed -i '/^disk.dataPartition.size/d' "$HOME/.android/avd/phone.avd/config.ini"
-          echo disk.dataPartition.size=2G >> "$HOME/.android/avd/phone.avd/config.ini"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/android-user"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          avdmanager create avd --force -n phone --device pixel_2 --path "$ANDROID_AVD_HOME/phone.avd" -k 'system-images;android-35;google_apis;x86_64' <<<no
+          sed -i '/^disk.dataPartition.size/d' "$ANDROID_AVD_HOME/phone.avd/config.ini"
+          echo disk.dataPartition.size=2G >> "$ANDROID_AVD_HOME/phone.avd/config.ini"
           df -h "$HOME"
           "$ANDROID_HOME/emulator/emulator" -avd phone -no-window -no-audio -no-boot-anim -memory 2048 -cores 2 -gpu swiftshader -no-snapshot > "$RUNNER_TEMP/emulator.log" 2>&1 &
           emupid=$!
