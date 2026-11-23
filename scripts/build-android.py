@@ -27,6 +27,9 @@ with tempfile.TemporaryDirectory() as directory:
     run("jar", "cf", temp/"classes.jar", "-C", classes, ".")
     run(tools/"d8", "--release", "--min-api", "26", "--lib", platform, "--output", dex, temp/"classes.jar")
     with zipfile.ZipFile(temp/"base.apk","a") as package:
+        package.write("NOTICE","assets/NOTICE.txt")
+        if Path("LICENSE").exists():
+            package.write("LICENSE","assets/LICENSE.txt")
         package.write(dex/"classes.dex","classes.dex",compress_type=zipfile.ZIP_DEFLATED)
     run(tools/"zipalign", "-f", "-p", "4", temp/"base.apk", temp/"aligned.apk")
     run(tools/"apksigner","sign","--ks",os.environ["ANDROID_KEYSTORE"],"--ks-key-alias","abyssinia","--ks-pass","env:ANDROID_STORE_PASS","--out",output,temp/"aligned.apk")
