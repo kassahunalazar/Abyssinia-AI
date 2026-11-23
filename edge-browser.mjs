@@ -246,8 +246,8 @@ export async function openEdgeForm(value, signal, { headless = false, allowLocal
     })();
     return closing;
   }
-  async function bounded(action, fn) {
-    const deadline = AbortSignal.any([action,AbortSignal.timeout(15000)]);
+  async function bounded(action, fn, timeoutMs = 15000) {
+    const deadline = AbortSignal.any([action,AbortSignal.timeout(timeoutMs)]);
     const abort = () => { void close(); };
     deadline.addEventListener('abort',abort,{once:true});
     try {
@@ -299,7 +299,7 @@ export async function openEdgeForm(value, signal, { headless = false, allowLocal
       await command('Page.enable');
       await command('Fetch.enable',{patterns:[{urlPattern:'*'}]});
       await load(initialHtml);
-    });
+    }, 45000);
   } catch(error) {
     await close();
     throw error;
