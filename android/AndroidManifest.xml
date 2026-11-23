@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.abyssinia.mobile" android:versionCode="1" android:versionName="0.1.0">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <application android:label="Abyssinia AI" android:allowBackup="false" android:icon="@drawable/launcher" android:networkSecurityConfig="@xml/network_security" android:theme="@android:style/Theme.Material.NoActionBar">
+    <activity android:name=".AssistantActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+  </application>
+</manifest>

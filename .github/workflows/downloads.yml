@@ -1,0 +1,61 @@
+name: Build downloadable apps
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24.15.0', architecture: x64}
+      - shell: pwsh
+        run: |
+          ./scripts/build-windows.ps1
+          ./scripts/build-installer.ps1
+          $dest = Join-Path $env:RUNNER_TEMP abyssinia-install
+          $p = Start-Process .runtime/Abyssinia-AI-Setup.exe -ArgumentList "--extract `"$dest`"" -Wait -PassThru
+          if ($p.ExitCode) { throw 'Installation failed' }
+          $app = Get-ChildItem $dest -Filter node.exe -Recurse | Select-Object -First 1
+          if (!$app) { throw 'Node missing' }
+          & $app.FullName --check (Join-Path $app.DirectoryName server.mjs)
+          if ($LASTEXITCODE) { throw 'Gateway check failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-download
+          path: .runtime/Abyssinia-AI-Setup.exe
+          include-hidden-files: true
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'system-images;android-35;google_apis;x86_64' 'emulator'
+      - name: Build signed Android package
+        env:
+          SIGNING_STORE: ${{ secrets.ABYSSINIA_SIGNING_STORE }}
+          ANDROID_STORE_PASS: ${{ secrets.ABYSSINIA_SIGNING_PASSWORD }}
+        run: |
+          set -eu
+          export ANDROID_KEYSTORE="$RUNNER_TEMP/mobile-release.p12"
+          trap 'rm -f "$ANDROID_KEYSTORE"' EXIT
+          printf '%s' "$SIGNING_STORE" | base64 -d > "$ANDROID_KEYSTORE"
+          python scripts/build-android.py
+      - name: Install and exercise the APK
+        run: |
+          set -eu
+          sudo chmod a+rw /dev/kvm
+          avdmanager create avd --force -n phone -k 'system-images;android-35;google_apis;x86_64' <<<no
+          "$ANDROID_HOME/emulator/emulator" -avd phone -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          timeout 360 adb wait-for-device
+          timeout 360 bash -c 'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == 1 ]]; do sleep 2; done'
+          adb shell input keyevent 82
+          adb install .runtime/Abyssinia-AI.apk
+          python android/smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-download
+          path: .runtime/Abyssinia-AI.apk
+          include-hidden-files: true
