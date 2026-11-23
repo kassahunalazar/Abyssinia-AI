@@ -49,19 +49,30 @@ jobs:
           trap 'rm -f "$ANDROID_KEYSTORE"' EXIT
           printf '%s' "$SIGNING_STORE" | base64 -d > "$ANDROID_KEYSTORE"
           python scripts/build-android.py
-      - name: Install and exercise the APK
-        run: |
-          set -eu
-          sudo chmod a+rw /dev/kvm
-          avdmanager create avd --force -n phone -k 'system-images;android-35;google_apis;x86_64' <<<no
-          "$ANDROID_HOME/emulator/emulator" -avd phone -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          timeout 360 adb wait-for-device
-          timeout 360 bash -c 'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == 1 ]]; do sleep 2; done'
-          adb shell input keyevent 82
-          adb install .runtime/Abyssinia-AI.apk
-          python android/smoke.py
       - uses: actions/upload-artifact@v4
         with:
           name: android-download
           path: .runtime/Abyssinia-AI.apk
           include-hidden-files: true
+      - name: Install and exercise the APK
+        run: |
+          set -eu
+          sudo chmod a+rw /dev/kvm
+          avdmanager create avd --force -n phone -k 'system-images;android-35;google_apis;x86_64' <<<no
+          sed -i '/^disk.dataPartition.size/d' "$HOME/.android/avd/phone.avd/config.ini"
+          echo disk.dataPartition.size=2G >> "$HOME/.android/avd/phone.avd/config.ini"
+          df -h "$HOME"
+          "$ANDROID_HOME/emulator/emulator" -avd phone -no-window -no-audio -no-boot-anim -memory 2048 -cores 2 -gpu swiftshader -no-snapshot > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emupid=$!
+          for attempt in {1..90}; do
+            if ! kill -0 "$emupid" 2>/dev/null; then cat "$RUNNER_TEMP/emulator.log"; exit 1; fi
+            if adb devices | grep -q 'emulator-.*device$'; then break; fi
+            sleep 2
+          done
+          adb devices
+          tail -40 "$RUNNER_TEMP/emulator.log"
+          timeout 45 adb wait-for-device
+          timeout 360 bash -c 'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == 1 ]]; do sleep 2; done'
+          adb shell input keyevent 82
+          adb install .runtime/Abyssinia-AI.apk
+          python android/smoke.py
