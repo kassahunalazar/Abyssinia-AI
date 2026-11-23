@@ -1,6 +1,6 @@
 # Abyssinia AI · አቢሲኒያ AI
 
-An Amharic-first assistant by **A-K-E-T-O-A-I**. Use everyday Amharic, English, or both in one conversation. Choose the model that answers you.
+An Amharic-first assistant by **AK ETHIO AI**. Use everyday Amharic, English, or both in one conversation. Choose the model that answers you.
 
 [Download and onboarding page](https://kassahunalazar.github.io/amharic-hermes/)
 
@@ -39,4 +39,4 @@ Both editions send chat messages to the model endpoint you select. Provider char
 - [Build the Windows and Android downloads](guides/build.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-Maintained by **A-K-E-T-O-A-I**.
+Maintained by **AK ETHIO AI**. [Official business website](https://akethioai.netlify.app/)

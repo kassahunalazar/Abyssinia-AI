@@ -30,6 +30,7 @@ def visible(label):
             if label == node.get("content-desc") or label.lower() in node.get("text","").lower():
                 return node
         time.sleep(1)
+    print([(n.get("text"),n.get("content-desc")) for n in ET.fromstring(xml).iter("node")],flush=True)
     raise RuntimeError("Could not find " + label)
 
 def tap(label):
@@ -44,13 +45,16 @@ tap("Settings")
 tap("HTTPS API base URL")
 adb("shell","input","keycombination","113","29")
 adb("shell","input","text","http://127.0.0.1:18789/v1")
+assert visible("HTTPS API base URL").get("text") == "http://127.0.0.1:18789/v1"
 tap("Model ID")
 adb("shell","input","text","fixture")
 adb("shell","input","keyevent","4")
+assert visible("Model ID").get("text") == "fixture"
 tap("Save")
 tap("መልዕክት ይጻፉ")
 adb("shell","input","text","Hello")
 adb("shell","input","keyevent","4")
+assert visible("መልዕክት ይጻፉ").get("text") == "Hello"
 tap("Send")
 visible("ሰላም ከአቢሲኒያ")
 print("Installed APK completed a provider round trip with an Amharic reply.")

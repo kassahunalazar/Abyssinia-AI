@@ -25,6 +25,7 @@ public final class AssistantActivity extends Activity {
     private LinearLayout root, messages;
     private ScrollView scroll;
     private EditText draft;
+    private TextView status;
     private Button send, settings;
     private String key = "";
     private JSONArray history;
@@ -69,6 +70,7 @@ public final class AssistantActivity extends Activity {
         scroll = new ScrollView(this); messages = column(); scroll.addView(messages);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         render();
+        status=text("",14);status.setVisibility(View.GONE);root.addView(status);
         draft=input("መልዕክት ይጻፉ",state==null?"":state.getString("draft",""));
         draft.setSingleLine(false); draft.setMaxLines(4); root.addView(draft);
         LinearLayout actions=new LinearLayout(this);
@@ -93,7 +95,7 @@ public final class AssistantActivity extends Activity {
         EditText secret=input("API key · current session",key);
         secret.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         form.addView(base);form.addView(model);form.addView(secret);
-        form.addView(text("መልዕክቶችዎ ወደሚመርጡት አቅራቢ ይላካሉ።\nUse a Chat Completions endpoint. Your key stays in memory.",14));
+        form.addView(text("Abyssinia AI · AK ETHIO AI\nመልዕክቶችዎ ወደሚመርጡት አቅራቢ ይላካሉ።\nUse a Chat Completions endpoint. Your key stays in memory.",14));
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("አቅራቢ · Provider").setView(form)
             .setNegativeButton(android.R.string.cancel,null).setPositiveButton("Save",null).create();
         dialog.show();
@@ -149,7 +151,7 @@ public final class AssistantActivity extends Activity {
             for(int i=Math.max(0,history.length()-8);i<history.length();i++)turns.put(history.get(i));
             turns.put(message("user",prompt));
         }catch(JSONException e){return;}
-        busy=true;send.setEnabled(false);settings.setEnabled(false);draft.setEnabled(false);send.setText("ቆይ…");
+        status.setVisibility(View.GONE);busy=true;send.setEnabled(false);settings.setEnabled(false);draft.setEnabled(false);send.setText("ቆይ…");
         worker.execute(()->{
             try{
                 String answer=request(base,token,new JSONObject().put("model",model).put("messages",turns));
@@ -161,7 +163,7 @@ public final class AssistantActivity extends Activity {
                         prefs.edit().putString("history",history.toString()).apply();draft.setText("");render();
                     }catch(JSONException ignored){}
                 });
-            }catch(Exception e){runOnUiThread(()->{if(!isDestroyed())notice("መልስ አልተገኘም። Check the provider URL, model and key.");});}
+            }catch(Exception e){runOnUiThread(()->{if(!isDestroyed()){status.setText("መልስ አልተገኘም። Check the provider URL, model and key. ("+e.getClass().getSimpleName()+")");status.setVisibility(View.VISIBLE);}});}
             finally{runOnUiThread(()->{if(!isDestroyed()){busy=false;send.setText("ላክ");send.setEnabled(true);settings.setEnabled(true);draft.setEnabled(true);}});}
         });
     }
