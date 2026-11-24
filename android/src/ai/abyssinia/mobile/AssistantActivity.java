@@ -25,7 +25,24 @@ public final class AssistantActivity extends Activity {
     private LinearLayout root, messages;
     private ScrollView scroll;
     private EditText draft;
-    private TextView status;
+    private TextView status, providerBadge;
+    private static final String[] NAMES = {"Google Gemini", "OpenAI", "OpenRouter", "Custom"};
+    private static final String[] BASES = {"https://generativelanguage.googleapis.com/v1beta/openai", "https://api.openai.com/v1", "https://openrouter.ai/api/v1", ""};
+    private static final String[] MODELS = {"gemini-4-hydrogen", "", "", ""};
+    private String baseUrl() { return prefs.getString("base", BASES[0]); }
+    private String modelId() { return prefs.getString("model", MODELS[preset(baseUrl())]); }
+    private int preset(String url) {
+        for (int i=0; i<BASES.length-1; i++) if (BASES[i].equals(url)) return i;
+        return BASES.length-1;
+    }
+    private void panel(View v, int radius, String fill) {
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.parseColor(fill));
+        bg.setCornerRadius(dp(radius));
+        bg.setStroke(dp(1), Color.parseColor("#39443f"));
+        v.setBackground(bg);
+        v.setPadding(dp(14),dp(10),dp(14),dp(10));
+    }
     private Button send, settings;
     private String key = "";
     private JSONArray history;
@@ -60,43 +77,80 @@ public final class AssistantActivity extends Activity {
         prefs = getSharedPreferences("assistant", MODE_PRIVATE);
         try { history = new JSONArray(prefs.getString("history","[]")); }
         catch (JSONException ignored) { history = new JSONArray(); }
-        root = column(); root.setBackgroundColor(Color.rgb(18,34,30));
+        root = column(); root.setBackgroundColor(Color.rgb(19,23,25));
         root.setPadding(dp(16),dp(10),dp(16),dp(12)); root.setFitsSystemWindows(true);
         setContentView(root);
         LinearLayout top = new LinearLayout(this);
-        top.addView(text("Abyssinia AI",24),new LinearLayout.LayoutParams(0,-2,1));
+        top.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView brand=text("Abyssinia AI",20);
+        android.graphics.drawable.GradientDrawable flag=new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xffa5dbab,0xfffcdf83,0xfff5a293});
+        flag.setCornerRadius(dp(7)); brand.setBackground(flag); brand.setTextColor(0xff172723);
+        brand.setPadding(dp(10),dp(4),dp(10),dp(4)); top.addView(brand);
+        top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         settings = button("ቅንብሮች","Settings",v -> configure());
-        top.addView(settings); root.addView(top);
+        panel(settings,10,"#22292c"); top.addView(settings); root.addView(top);
+        providerBadge=text(NAMES[preset(baseUrl())]+" · "+modelId(),14);
+        providerBadge.setTextColor(0xff9bdfcf); root.addView(providerBadge);
         scroll = new ScrollView(this); messages = column(); scroll.addView(messages);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         render();
         status=text("",14);status.setVisibility(View.GONE);root.addView(status);
         draft=input("መልዕክት ይጻፉ",state==null?"":state.getString("draft",""));
-        draft.setSingleLine(false); draft.setMaxLines(4); root.addView(draft);
+        draft.setSingleLine(false); draft.setMaxLines(4);
+        LinearLayout composer=column(); panel(composer,23,"#212629"); root.addView(composer);
+        draft.setBackgroundColor(Color.TRANSPARENT); composer.addView(draft);
         LinearLayout actions=new LinearLayout(this);
         actions.addView(button("🎙","Dictate",v -> dictate()));
-        send=button("ላክ","Send",v -> submit()); actions.addView(send);
-        root.addView(actions);
+        send=button("ላክ","Send",v -> submit()); actions.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        panel(send,12,"#185649"); actions.addView(send);
+        composer.addView(actions);
     }
     private void render() {
         messages.removeAllViews();
-        if(history.length()==0) messages.addView(text("ሰላም፣ ዛሬ ምን ልርዳዎት?\nበቅንብሮች ውስጥ የሞዴል አቅራቢ ይምረጡ።",19));
+        if(history.length()==0) {
+            TextView welcome=text("ሰላም፣ ዛሬ ምን ልርዳዎት?",30);
+            welcome.setPadding(0,dp(36),0,dp(20)); messages.addView(welcome);
+            for(String prompt : new String[]{"ጽሑፍ ለማዘጋጀት እርዳኝ", "ለዛሬ የሥራ እቅድ እናውጣ"}) {
+                Button suggestion=button(prompt,prompt,v->{draft.setText(prompt);draft.setSelection(prompt.length());draft.requestFocus();});
+                panel(suggestion,14,"#232b2c"); addCard(suggestion);
+            }
+        }
         for(int i=0;i<history.length();i++){
             JSONObject m=history.optJSONObject(i); if(m==null)continue;
             TextView t=text(("assistant".equals(m.optString("role"))?"Abyssinia AI":"እርስዎ")+"\n"+m.optString("content"),17);
-            messages.addView(t);
+            panel(t,14,"assistant".equals(m.optString("role"))?"#22292c":"#25443e"); addCard(t);
         }
         scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));
     }
+    private void addCard(View card) {
+        LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,-2);
+        layout.bottomMargin=dp(10); messages.addView(card,layout);
+    }
     private void configure() {
         LinearLayout form=column(); form.setPadding(dp(20),0,dp(20),0);
-        EditText base=input("HTTPS API base URL",prefs.getString("base","https://openrouter.ai/api/v1"));
-        EditText model=input("Model ID",prefs.getString("model",""));
+        EditText base=input("HTTPS API base URL",baseUrl());
+        EditText model=input("Model ID",modelId());
         EditText secret=input("API key · current session",key);
         secret.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        form.addView(base);form.addView(model);form.addView(secret);
+        Spinner providers=new Spinner(this);
+        providers.setContentDescription("Provider");
+        providers.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,NAMES));
+        int initial=preset(baseUrl()); providers.setSelection(initial); base.setEnabled(initial==NAMES.length-1);
+        providers.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            int previous=initial;
+            public void onNothingSelected(AdapterView<?> parent){}
+            public void onItemSelected(AdapterView<?> parent,View view,int pos,long row){
+                if(previous==pos)return;
+                previous=pos; secret.setText("");
+                base.setEnabled(pos==NAMES.length-1); base.setText(BASES[pos]); model.setText(MODELS[pos]);
+            }
+        });
+        ScrollView settingsScroll=new ScrollView(this); settingsScroll.addView(form);
+        form.addView(providers); form.addView(base);form.addView(model);form.addView(secret);
         form.addView(text("Abyssinia AI · AK ETHIO AI\nመልዕክቶችዎ ወደሚመርጡት አቅራቢ ይላካሉ።\nUse a Chat Completions endpoint. Your key stays in memory.",14));
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("አቅራቢ · Provider").setView(form)
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("አቅራቢ · Provider").setView(settingsScroll)
             .setNegativeButton(android.R.string.cancel,null).setPositiveButton("Save",null).create();
         dialog.show();
         dialog.getButton(-1).setOnClickListener(v -> {
@@ -104,15 +158,15 @@ public final class AssistantActivity extends Activity {
             String id=model.getText().toString().trim();
             try { endpointUrl(endpoint); } catch(Exception e){base.setError("Use HTTPS or device loopback");return;}
             if(id.isEmpty()||id.length()>256){model.setError("Enter a model ID");return;}
-            String old=prefs.getString("base","https://openrouter.ai/api/v1");
+            String old=baseUrl();
             if(!old.equals(endpoint)&&!key.isEmpty()&&secret.getText().toString().equals(key)){
                 secret.setText("");secret.setError("Enter a key for this endpoint");return;
             }
-            if(!old.equals(endpoint)||!id.equals(prefs.getString("model",""))){
+            if(!old.equals(endpoint)||!id.equals(modelId())){
                 history=new JSONArray();prefs.edit().remove("history").apply();render();
             }
             key=secret.getText().toString().trim();
-            prefs.edit().putString("base",endpoint).putString("model",id).apply();dialog.dismiss();
+            prefs.edit().putString("base",endpoint).putString("model",id).apply();providerBadge.setText(NAMES[preset(endpoint)]+" · "+id);dialog.dismiss();
         });
     }
     private static URL endpointUrl(String base) throws Exception {
@@ -140,11 +194,11 @@ public final class AssistantActivity extends Activity {
     }
     private void notice(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
     private void submit(){
-        String prompt=draft.getText().toString().trim(),model=prefs.getString("model","");
+        String prompt=draft.getText().toString().trim(),model=modelId();
         if(prompt.isEmpty()||busy)return;
         if(prompt.length()>8000){draft.setError("8,000 characters maximum");return;}
-        if(model.isEmpty()){configure();return;}
-        final String base=prefs.getString("base",""),token=key;
+        if(model.isEmpty() || (preset(baseUrl())<NAMES.length-1 && key.isEmpty())){configure();return;}
+        final String base=baseUrl(),token=key;
         final JSONArray turns=new JSONArray();
         try{
             turns.put(message("system","You are Abyssinia AI. Reply in natural Amharic by default. Follow the user's explicit language choice."));
