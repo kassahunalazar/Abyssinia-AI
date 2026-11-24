@@ -43,7 +43,7 @@ adb("reverse","tcp:18789","tcp:"+str(server.server_port))
 adb("shell","am","start","-n","ai.abyssinia.mobile/.AssistantActivity")
 tap("Settings")
 assert visible("Google Gemini") is not None
-tap("Provider")
+tap("Google Gemini")
 tap("Custom")
 tap("HTTPS API base URL")
 adb("shell","input","keyevent","123",*(["67"]*64))
