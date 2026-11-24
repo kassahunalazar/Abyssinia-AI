@@ -40,3 +40,7 @@ Both editions send chat messages to the model endpoint you select. Provider char
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Maintained by **AK ETHIO AI**. [Official business website](https://akethioai.netlify.app/)
+
+## License
+
+Original Abyssinia AI code is licensed under the [MIT License](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to bundled components.
